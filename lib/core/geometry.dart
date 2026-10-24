@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 import 'dart:math' as math;
 
 class Point2 {
@@ -6,9 +7,8 @@ class Point2 {
   final double x;
   final double y;
 
-  double distanceTo(Point2 other) => math.sqrt(
-        (x - other.x) * (x - other.x) + (y - other.y) * (y - other.y),
-      );
+  double distanceTo(Point2 other) =>
+      math.sqrt((x - other.x) * (x - other.x) + (y - other.y) * (y - other.y));
 
   Map<String, Object> toJson() => {'x': x, 'y': y};
 
@@ -24,8 +24,8 @@ class Point2 {
 
 class Bounds2 {
   const Bounds2(this.left, this.top, this.right, this.bottom)
-      : assert(left <= right),
-        assert(top <= bottom);
+    : assert(left <= right),
+      assert(top <= bottom);
 
   final double left;
   final double top;
@@ -45,11 +45,11 @@ class Bounds2 {
       point.y <= bottom;
 
   Bounds2 union(Bounds2 other) => Bounds2(
-        math.min(left, other.left),
-        math.min(top, other.top),
-        math.max(right, other.right),
-        math.max(bottom, other.bottom),
-      );
+    math.min(left, other.left),
+    math.min(top, other.top),
+    math.max(right, other.right),
+    math.max(bottom, other.bottom),
+  );
 }
 
 class GeometryObject {
@@ -69,7 +69,12 @@ class GeometryObject {
     if (points.isEmpty) {
       throw StateError('Geometry objects must contain at least one point.');
     }
-    var result = Bounds2(points.first.x, points.first.y, points.first.x, points.first.y);
+    var result = Bounds2(
+      points.first.x,
+      points.first.y,
+      points.first.x,
+      points.first.y,
+    );
     for (final point in points.skip(1)) {
       result = result.union(Bounds2(point.x, point.y, point.x, point.y));
     }
@@ -77,11 +82,11 @@ class GeometryObject {
   }
 
   Map<String, Object?> toJson() => {
-        'id': id,
-        'kind': kind,
-        'points': points.map((point) => point.toJson()).toList(),
-        if (label != null) 'label': label,
-      };
+    'id': id,
+    'kind': kind,
+    'points': points.map((point) => point.toJson()).toList(),
+    if (label != null) 'label': label,
+  };
 
   factory GeometryObject.fromJson(Map<String, dynamic> json) {
     final id = json['id'];
@@ -94,7 +99,9 @@ class GeometryObject {
       id: id,
       kind: kind,
       points: rawPoints
-          .map((point) => Point2.fromJson(Map<String, dynamic>.from(point as Map)))
+          .map(
+            (point) => Point2.fromJson(Map<String, dynamic>.from(point as Map)),
+          )
           .toList(growable: false),
       label: json['label'] as String?,
     );
@@ -102,20 +109,17 @@ class GeometryObject {
 }
 
 class GeometryDocument {
-  GeometryDocument({
-    required this.objects,
-    this.metadata = const {},
-  });
+  GeometryDocument({required this.objects, this.metadata = const {}});
 
   final List<GeometryObject> objects;
   final Map<String, Object?> metadata;
 
   Map<String, Object?> toJson() => {
-        'format': 'moesketchpad-document',
-        'schemaVersion': 1,
-        'objects': objects.map((object) => object.toJson()).toList(),
-        'metadata': metadata,
-      };
+    'format': 'moesketchpad-document',
+    'schemaVersion': 1,
+    'objects': objects.map((object) => object.toJson()).toList(),
+    'metadata': metadata,
+  };
 
   factory GeometryDocument.fromJson(Map<String, dynamic> json) {
     if (json['format'] != 'moesketchpad-document' ||
@@ -125,8 +129,10 @@ class GeometryDocument {
     }
     return GeometryDocument(
       objects: (json['objects'] as List)
-          .map((item) =>
-              GeometryObject.fromJson(Map<String, dynamic>.from(item as Map)))
+          .map(
+            (item) =>
+                GeometryObject.fromJson(Map<String, dynamic>.from(item as Map)),
+          )
           .toList(growable: false),
       metadata: json['metadata'] is Map
           ? Map<String, Object?>.from(json['metadata'] as Map)
@@ -156,7 +162,9 @@ class TriangleSolution {
         sides.any((side) => !side.isFinite || side <= 0) ||
         !hypotenuse.isFinite ||
         !rotationDegrees.isFinite) {
-      throw const FormatException('Triangle sides and rotation must be finite and positive.');
+      throw const FormatException(
+        'Triangle sides and rotation must be finite and positive.',
+      );
     }
     final sorted = [...sides]..sort();
     final scale = sorted.last;
@@ -176,11 +184,11 @@ class TriangleSolution {
   }
 
   Map<String, Object> toJson() => {
-        'type': type,
-        'sides': sides,
-        'hypotenuse': sides.reduce(math.max),
-        'rotationDegrees': rotationDegrees,
-      };
+    'type': type,
+    'sides': sides,
+    'hypotenuse': sides.reduce(math.max),
+    'rotationDegrees': rotationDegrees,
+  };
 }
 
 class ExpressionEvaluator {
@@ -199,11 +207,16 @@ class ExpressionEvaluator {
 class _ExpressionParser {
   _ExpressionParser(this.source, this.variables);
 
+  static const int _maximumNesting = 64;
   final String source;
   final Map<String, double> variables;
   int _index = 0;
+  int _nesting = 0;
 
   double parse() {
+    if (source.length > 4096) {
+      throw const FormatException('Expression exceeds the maximum length.');
+    }
     final result = _sum();
     _skipSpaces();
     if (_index != source.length) {
@@ -226,12 +239,12 @@ class _ExpressionParser {
   }
 
   double _product() {
-    var value = _power();
+    var value = _unary();
     while (true) {
       if (_take('*')) {
-        value *= _power();
+        value *= _unary();
       } else if (_take('/')) {
-        final divisor = _power();
+        final divisor = _unary();
         if (divisor == 0) throw const FormatException('Division by zero.');
         value /= divisor;
       } else {
@@ -241,22 +254,26 @@ class _ExpressionParser {
   }
 
   double _power() {
-    final base = _unary();
-    return _take('^') ? math.pow(base, _power()).toDouble() : base;
+    final base = _primary();
+    return _take('^') ? math.pow(base, _nested(_unary)).toDouble() : base;
   }
 
   double _unary() {
-    if (_take('+')) return _unary();
-    if (_take('-')) return -_unary();
-    return _primary();
+    if (_take('+')) return _nested(_unary);
+    if (_take('-')) return -_nested(_unary);
+    return _power();
   }
 
   double _primary() {
     _skipSpaces();
     if (_take('(')) {
-      final value = _sum();
-      if (!_take(')')) throw const FormatException('Missing closing parenthesis.');
-      return value;
+      return _nested(() {
+        final value = _sum();
+        if (!_take(')')) {
+          throw const FormatException('Missing closing parenthesis.');
+        }
+        return value;
+      });
     }
     if (_index < source.length &&
         (source[_index].contains(RegExp(r'[0-9.]')))) {
@@ -272,8 +289,13 @@ class _ExpressionParser {
     if (!_take('(')) {
       throw FormatException('Unknown variable "$identifier".');
     }
-    final argument = _sum();
-    if (!_take(')')) throw const FormatException('Missing closing parenthesis.');
+    final argument = _nested(() {
+      final value = _sum();
+      if (!_take(')')) {
+        throw const FormatException('Missing closing parenthesis.');
+      }
+      return value;
+    });
     return switch (identifier) {
       'sin' => math.sin(argument),
       'cos' => math.cos(argument),
@@ -331,4 +353,16 @@ class _ExpressionParser {
   }
 
   bool _isSign(String value) => value == '+' || value == '-';
+
+  double _nested(double Function() parse) {
+    if (++_nesting > _maximumNesting) {
+      _nesting--;
+      throw const FormatException('Expression nesting limit exceeded.');
+    }
+    try {
+      return parse();
+    } finally {
+      _nesting--;
+    }
+  }
 }

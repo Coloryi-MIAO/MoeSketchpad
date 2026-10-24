@@ -1,12 +1,12 @@
 {
-    "name": "moesketchpad",
-    "short_name": "moesketchpad",
+    "name": "萌板 / MoeSketchpad",
+    "short_name": "萌板",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#dfe3e8",
+    "theme_color": "#3978b7",
+    "description": "Cross-platform dynamic geometry sketchpad.",
+    "orientation": "landscape",
     "prefer_related_applications": false,
     "icons": [
         {

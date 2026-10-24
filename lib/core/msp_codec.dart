@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -49,7 +50,9 @@ class MspCodec {
     }
     final plain = utf8.encode(jsonEncode(document.toJson()));
     if (plain.length > maxPayloadBytes) {
-      throw const MspFormatException('Document payload exceeds the size limit.');
+      throw const MspFormatException(
+        'Document payload exceeds the size limit.',
+      );
     }
 
     final random = Random.secure();
@@ -75,7 +78,9 @@ class MspCodec {
       ...box.mac.bytes,
     ]);
     if (result.length > maxFileBytes) {
-      throw const MspFormatException('Encoded document exceeds the size limit.');
+      throw const MspFormatException(
+        'Encoded document exceeds the size limit.',
+      );
     }
     return result;
   }
@@ -99,20 +104,20 @@ class MspCodec {
     try {
       final key = await _deriveKey(password, header.salt);
       final plain = await _cipher.decrypt(
-        SecretBox(
-          ciphertext,
-          nonce: header.nonce,
-          mac: Mac(tag),
-        ),
+        SecretBox(ciphertext, nonce: header.nonce, mac: Mac(tag)),
         secretKey: key,
         aad: bytes.sublist(0, _headerLength),
       );
       if (plain.length > maxPayloadBytes) {
-        throw const MspFormatException('Decrypted payload exceeds the size limit.');
+        throw const MspFormatException(
+          'Decrypted payload exceeds the size limit.',
+        );
       }
       final json = jsonDecode(utf8.decode(plain));
       if (json is! Map<String, dynamic>) {
-        throw const MspFormatException('Document payload must be a JSON object.');
+        throw const MspFormatException(
+          'Document payload must be a JSON object.',
+        );
       }
       return GeometryDocument.fromJson(json);
     } on MspFormatException {
@@ -149,16 +154,12 @@ class MspCodec {
     return GeometryDocument.fromJson(decoded);
   }
 
-  Future<SecretKey> _deriveKey(String password, List<int> salt) =>
-      Argon2id(
-        memory: _memoryKiB,
-        iterations: _iterations,
-        parallelism: _parallelism,
-        hashLength: 32,
-      ).deriveKey(
-        secretKey: SecretKey(utf8.encode(password)),
-        nonce: salt,
-      );
+  Future<SecretKey> _deriveKey(String password, List<int> salt) => Argon2id(
+    memory: _memoryKiB,
+    iterations: _iterations,
+    parallelism: _parallelism,
+    hashLength: 32,
+  ).deriveKey(secretKey: SecretKey(utf8.encode(password)), nonce: salt);
 
   Uint8List _makeHeader({
     required int flags,
