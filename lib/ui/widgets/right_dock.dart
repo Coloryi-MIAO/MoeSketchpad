@@ -81,7 +81,12 @@ class _RightDockState extends State<RightDock> {
               quarterTurns: 1,
               child: Text(
                 l10n.properties,
-                style: const TextStyle(fontSize: 10, letterSpacing: 1),
+                style: const TextStyle(
+                  fontSize: 12,
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xff33485c),
+                ),
               ),
             ),
           ],
@@ -91,9 +96,9 @@ class _RightDockState extends State<RightDock> {
     return Container(
       width: MediaQuery.sizeOf(context).width < 860 ? 248 : 292,
       decoration: BoxDecoration(
-        color: widget.cute ? const Color(0xfff8f3f7) : const Color(0xffedf1f5),
+        color: widget.cute ? const Color(0xfff5edf2) : const Color(0xffe7edf3),
         border: const Border(
-          left: BorderSide(color: Color(0xffb7c2cd), width: 1.2),
+          left: BorderSide(color: Color(0xff899aaa), width: 1.4),
         ),
       ),
       child: Column(
@@ -933,17 +938,19 @@ class _DockTitle extends StatelessWidget {
     height: 32,
     padding: const EdgeInsets.only(left: 10),
     decoration: BoxDecoration(
-      color: cute ? const Color(0xffeee0e8) : const Color(0xffdbe4ec),
-      border: const Border(bottom: BorderSide(color: Color(0xffb7c2cd))),
+      color: cute ? const Color(0xffe9d8e2) : const Color(0xffd2dde7),
+      border: const Border(
+        bottom: BorderSide(color: Color(0xff899aaa), width: 1.2),
+      ),
     ),
     child: Row(
       children: [
         Text(
           title,
           style: const TextStyle(
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: FontWeight.w700,
-            color: Color(0xff203548),
+            color: Color(0xff172b3d),
           ),
         ),
         const Spacer(),
@@ -991,7 +998,11 @@ class _DockSection extends StatelessWidget {
       leading: Icon(icon, size: 15, color: const Color(0xff6d7e8e)),
       title: Text(
         title,
-        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: Color(0xff203548),
+        ),
       ),
       children: [child],
     ),

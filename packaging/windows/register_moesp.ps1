@@ -9,11 +9,11 @@ $ErrorActionPreference = "Stop"
 $exe = (Resolve-Path $ExePath).Path
 $icon = (Resolve-Path $IconPath).Path
 $classes = "HKCU:\Software\Classes"
-New-Item -Path "$classes\.msp" -Force | Out-Null
-Set-ItemProperty -Path "$classes\.msp" -Name "(default)" -Value "MoeSketchpad.Document"
-Set-ItemProperty -Path "$classes\.msp" -Name "Content Type" -Value "application/x-moesketchpad"
+New-Item -Path "$classes\.moesp" -Force | Out-Null
+Set-ItemProperty -Path "$classes\.moesp" -Name "(default)" -Value "MoeSketchpad.Document"
+Set-ItemProperty -Path "$classes\.moesp" -Name "Content Type" -Value "application/x-moesketchpad"
 New-Item -Path "$classes\MoeSketchpad.Document\DefaultIcon" -Force | Out-Null
 Set-ItemProperty -Path "$classes\MoeSketchpad.Document\DefaultIcon" -Name "(default)" -Value "$icon,0"
 New-Item -Path "$classes\MoeSketchpad.Document\shell\open\command" -Force | Out-Null
 Set-ItemProperty -Path "$classes\MoeSketchpad.Document\shell\open\command" -Name "(default)" -Value "`"$exe`" `"%1`""
-Write-Host "Registered .msp for the current user. Use Windows Settings > Default apps to confirm."
+Write-Host "Registered .moesp for the current user. Use Windows Settings > Default apps to confirm."

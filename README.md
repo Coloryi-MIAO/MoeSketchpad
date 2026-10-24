@@ -1,6 +1,6 @@
 # 萌板 / MoeSketchpad
 
-跨平台动态几何画板，CDR 风格壳层 + 无边界世界坐标 + 自研加密 `.msp` v2。
+跨平台动态几何画板，CDR 风格壳层 + 无边界世界坐标 + 自研加密 `.moesp` v2。
 目标平台：Flutter Web / Windows / macOS。许可证：**GPL-3.0-only**。
 
 当前是**可运行的纵向切片**，不是全部需求均已完成的商业发布版。已实现与未实现
@@ -18,7 +18,7 @@
   Web `beforeunload` 降级提示。
 - 纯 Dart 内核：文档 schema v2、R-tree、稳健求交、阻尼最小二乘约束求解、
   测量、函数 AST、动画求值。
-- `.msp` v2：Argon2id + AES-256-GCM + gzip，头部作为 AAD；无明文几何。
+- `.moesp` v2：Argon2id + AES-256-GCM + gzip，头部作为 AAD；无明文几何。
 - `msp` CLI：create/constraint/label/measure/animate/calc/view/validate/
   inspect/convert/export/mcp-serve，统一退出码与 JSON 输出。
 - 三角简写与规范形式等价：`--triangle-90-3*4*5-5/180`。
@@ -60,8 +60,8 @@ dart run packages/moesketchpad_cli/bin/msp.dart calc "sqrt(3^2+4^2)" --json
 
 # 密码只从环境变量读取；不要写在命令行
 export MSP_PASSWORD='your password'
-dart run packages/moesketchpad_cli/bin/msp.dart create point --x=1 --y=2 --file doc.msp
-dart run packages/moesketchpad_cli/bin/msp.dart inspect doc.msp --json
+dart run packages/moesketchpad_cli/bin/msp.dart create point --x=1 --y=2 --file doc.moesp
+dart run packages/moesketchpad_cli/bin/msp.dart inspect doc.moesp --json
 ```
 
 构建独立 CLI：
@@ -72,9 +72,9 @@ dart run packages/moesketchpad_cli/bin/msp.dart inspect doc.msp --json
 
 ## 打包与文件关联
 
-- Windows 图标已替换；安装器与 `.msp` 关联：
+- Windows 图标已替换；安装器与 `.moesp` 关联：
   `packaging/windows/moesketchpad.iss`（Inno Setup 6+），开发注册：
-  `packaging/windows/register_msp.ps1`。
+  `packaging/windows/register_moesp.ps1`。
 - macOS UTI/Document Type：`macos/Runner/Info.plist`；图标资产已替换。
   macOS 构建只能在 macOS runner 上验证。
 - Web PWA：`web/manifest.json`；MIME 响应头：`web/_headers`
@@ -83,7 +83,7 @@ dart run packages/moesketchpad_cli/bin/msp.dart inspect doc.msp --json
 
 ## 安全
 
-密码不得提交/写入日志。`.msp` 加密不替代对恶意文件的大小/结构校验；解析器
+密码不得提交/写入日志。`.moesp` 加密不替代对恶意文件的大小/结构校验；解析器
 有魔数、版本、KDF、长度、解压上限与 GCM 认证检查。AI/MCP 仅白名单工具，路径
 限制在 workspace 内，无 shell 拼接。完整说明见
 [架构与交付说明](docs/architecture.md) 与 [Copilot 内核任务](copanddsh.txt)。

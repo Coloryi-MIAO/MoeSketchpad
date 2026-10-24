@@ -322,7 +322,7 @@ class McpServer {
         final file = await requireWorkspaceFile(
           p.isAbsolute(rawPath) ? rawPath : p.join(workspace, rawPath),
           workspace: workspace,
-          requiredExtension: '.msp',
+          requiredExtension: '.moesp',
         );
         final validation = MspCodec().validate(await file.readAsBytes());
         return {'ok': true, ...validation.toJson()};
@@ -451,7 +451,7 @@ class McpServer {
     {
       'name': 'msp_validate_file',
       'description':
-          'Validate the structural header of an .msp file inside the approved workspace.',
+          'Validate the structural header of an .moesp file inside the approved workspace.',
       'inputSchema': {
         'type': 'object',
         'properties': {

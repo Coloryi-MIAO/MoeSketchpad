@@ -15,20 +15,13 @@ void main() {
     await tester.pumpWidget(const MoeSketchpadApp());
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('萌板'), findsWidgets);
     expect(find.textContaining('文件(F)'), findsOneWidget);
+    expect(find.byKey(const ValueKey('top-tool-select')), findsOneWidget);
+    expect(find.byKey(const ValueKey('top-tool-point')), findsOneWidget);
     expect(find.text('A4 · 210×297 mm'), findsNothing);
-    expect(find.text('画布'), findsOneWidget);
+    expect(find.text('画布 · 几何设定'), findsOneWidget);
     expect(find.text('选择'), findsWidgets);
-    expect(
-      find.byKey(const ValueKey('canvas-quick-tool-select')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('canvas-quick-tool-point')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('canvas-action-save')), findsOneWidget);
+    expect(find.byKey(const ValueKey('canvas-quick-toolbar')), findsNothing);
     expect(find.text('几何设定'), findsOneWidget);
     expect(find.text('基础网格间距'), findsOneWidget);
     expect(find.text('数值容差'), findsOneWidget);
@@ -49,10 +42,10 @@ void main() {
     expect(canvasBloc.state.gridBaseSpacing, 10);
     expect(documentBloc.state.active.document.view.gridBaseSpacing, 10);
     expect(
-      find.byKey(const ValueKey('canvas-action-grid-snap')).hitTestable(),
+      find.byKey(const ValueKey('toolbar-snap-grid')).hitTestable(),
       findsOneWidget,
     );
-    await tester.tap(find.byKey(const ValueKey('canvas-action-grid-snap')));
+    await tester.tap(find.byKey(const ValueKey('toolbar-snap-grid')));
     await tester.pumpAndSettle();
     expect(canvasBloc.state.snapGrid, isFalse);
     expect(documentBloc.state.active.document.view.snapGrid, isFalse);
@@ -82,14 +75,17 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(720, 704));
     await tester.pumpAndSettle();
     expect(find.text('文件(F)'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('top-tool-select')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('top-tool-point')).hitTestable(),
+      findsOneWidget,
+    );
     expect(find.text('选择'), findsWidgets);
     expect(find.text('几何设定'), findsOneWidget);
-    expect(find.byKey(const ValueKey('canvas-quick-toolbar')), findsOneWidget);
-    final quickToolbarRect = tester.getRect(
-      find.byKey(const ValueKey('canvas-quick-toolbar')),
-    );
-    expect(quickToolbarRect.left, greaterThanOrEqualTo(76));
-    expect(quickToolbarRect.right, lessThanOrEqualTo(720 - 248 - 22));
+    expect(find.byKey(const ValueKey('canvas-quick-toolbar')), findsNothing);
     expect(
       tester.getRect(find.text('文件(F)').first).top,
       greaterThanOrEqualTo(0),

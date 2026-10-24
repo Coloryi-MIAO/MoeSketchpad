@@ -62,15 +62,15 @@ class ToolBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Container(
-      width: 76,
+      width: 92,
       decoration: BoxDecoration(
-        color: cute ? const Color(0xfff4edf3) : const Color(0xffe6ebf0),
+        color: cute ? const Color(0xfff1e8ee) : const Color(0xffdce4ec),
         border: const Border(
-          right: BorderSide(color: Color(0xffb7c2cd), width: 1.2),
+          right: BorderSide(color: Color(0xff899aaa), width: 1.4),
         ),
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Column(
           children: [
             _ToolGroup(
@@ -161,9 +161,10 @@ class _SectionLabel extends StatelessWidget {
       text,
       textAlign: TextAlign.center,
       style: TextStyle(
-        fontSize: 8.5,
-        color: cute ? const Color(0xff9a7182) : const Color(0xff71808f),
-        letterSpacing: 0.4,
+        fontSize: 10,
+        color: cute ? const Color(0xff75485b) : const Color(0xff42576b),
+        letterSpacing: 0.35,
+        fontWeight: FontWeight.w700,
       ),
     ),
   );
@@ -279,14 +280,14 @@ class _ToolGroup extends StatelessWidget {
           ? toolName(shown)
           : '${toolName(shown)} · ${l10n.toolMoreInGroup}',
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
         child: InkWell(
           borderRadius: BorderRadius.circular(cute ? 9 : 3),
           onTap: () => onSelected(shown),
           onLongPress: alternatives.isEmpty ? null : openFlyout,
           onSecondaryTap: alternatives.isEmpty ? null : openFlyout,
           child: Container(
-            height: 48,
+            height: 56,
             decoration: BoxDecoration(
               color: selected
                   ? (cute ? const Color(0xffffe1ed) : const Color(0xffd9ebfb))
@@ -296,7 +297,7 @@ class _ToolGroup extends StatelessWidget {
                 color: selected
                     ? (cute ? const Color(0xffbf6687) : const Color(0xff5d93bd))
                     : const Color(0xffc4cdd6),
-                width: selected ? 1.4 : 1,
+                width: selected ? 1.8 : 1.2,
               ),
             ),
             child: Stack(
@@ -307,7 +308,7 @@ class _ToolGroup extends StatelessWidget {
                     children: [
                       Icon(
                         iconFor(shown),
-                        size: 21,
+                        size: 23,
                         color: selected
                             ? (cute
                                   ? const Color(0xff853855)
@@ -320,7 +321,7 @@ class _ToolGroup extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 9,
+                          fontSize: 10.5,
                           color: selected
                               ? (cute
                                     ? const Color(0xff853855)

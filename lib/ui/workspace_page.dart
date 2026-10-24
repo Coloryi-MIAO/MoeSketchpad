@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:moesketchpad_core/moesketchpad_core.dart';
@@ -153,7 +156,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
       if (saveAs || tab.path == null) {
         path = await FileService.saveDocument(
           suggestedName: tab.path == null
-              ? '${l10n.untitled(tab.untitledIndex)}.msp'
+              ? '${l10n.untitled(tab.untitledIndex)}.moesp'
               : p.basename(tab.path!),
           bytes: bytes,
         );
@@ -406,16 +409,135 @@ class _WorkspacePageState extends State<WorkspacePage> {
         context.read<CanvasBloc>().resetOrigin();
       case 'toggleDock':
         setState(() => _dockCollapsed = !_dockCollapsed);
+      case 'measure':
+        _addMeasurement(MeasurementType.length);
+      case 'animate':
+        _addAnimation();
+      case 'label':
+        _addTextAnnotation();
+      case 'insertTable':
+        _insertTable();
+      case 'exportPage':
+        _exportSvg();
+      case 'closeTab':
+        _closeTab(context.read<DocumentBloc>().state.activeIndex);
+      case 'selectTool':
+        context.read<ToolBloc>().select(MoeTool.select);
+      case 'pointTool':
+        context.read<ToolBloc>().select(MoeTool.point);
       case 'settings':
         _showSettings();
       case 'about':
         showAboutMoeSketchpad(context);
-      case 'closeTab':
-        _closeTab(context.read<DocumentBloc>().state.activeIndex);
-      case 'exportPage':
-        _showInfo(l10n.notImplemented(l10n.exportPage));
       default:
         _showInfo(l10n.notImplemented(action));
+    }
+  }
+
+  Future<void> _addTextAnnotation() async {
+    final documentBloc = context.read<DocumentBloc>();
+    final selection = context.read<SelectionBloc>().state;
+    final selected = selection.primary == null
+        ? null
+        : documentBloc.state.active.document.objectById(selection.primary!);
+    final controller = TextEditingController(text: selected?.label ?? '');
+    try {
+      final text = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(AppLocalizations.of(context).toolText),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 512,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: 'A',
+            ),
+            onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(AppLocalizations.of(context).cancel),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text.trim()),
+              child: Text(AppLocalizations.of(context).save),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || text == null || text.trim().isEmpty) return;
+      final value = text.trim();
+      if (selected != null) {
+        documentBloc.setLabel(selected.id, value);
+        return;
+      }
+      final origin = context.read<CanvasBloc>().state.origin;
+      documentBloc.addObject(
+        GeometryObject(
+          id: 'text-${DateTime.now().microsecondsSinceEpoch}',
+          kind: GeometryKind.point,
+          points: [origin],
+          label: value,
+          labelStyle: const LabelStyle(italic: false, fontSize: 18),
+          style: const ObjectStyle(strokeColor: 0xff203548),
+          params: const {'hideMarker': true},
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  void _insertTable() {
+    final origin = context.read<CanvasBloc>().state.origin;
+    const rows = 3;
+    const columns = 3;
+    const cellSize = 48.0;
+    var document = context.read<DocumentBloc>().state.active.document;
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final style = ObjectStyle(strokeColor: 0xff52697d, strokeWidth: 1.2);
+    for (var row = 0; row <= rows; row++) {
+      final y = origin.y + row * cellSize;
+      document = document.withObject(
+        GeometryObject(
+          id: 'table-$now-row-$row',
+          kind: GeometryKind.segment,
+          points: [origin, Point2(origin.x + columns * cellSize, y)],
+          style: style,
+        ),
+      );
+    }
+    for (var column = 0; column <= columns; column++) {
+      final x = origin.x + column * cellSize;
+      document = document.withObject(
+        GeometryObject(
+          id: 'table-$now-column-$column',
+          kind: GeometryKind.segment,
+          points: [Point2(x, origin.y), Point2(x, origin.y + rows * cellSize)],
+          style: style,
+        ),
+      );
+    }
+    context.read<DocumentBloc>().commitDocument(document);
+  }
+
+  Future<void> _exportSvg() async {
+    final l10n = AppLocalizations.of(context);
+    final document = context.read<DocumentBloc>().state.active.document;
+    final svg = SvgExporter().export(document);
+    try {
+      await FileService.saveExport(
+        suggestedName: '${document.title}.svg',
+        bytes: Uint8List.fromList(utf8.encode(svg)),
+        extension: 'svg',
+        mimeType: 'image/svg+xml',
+      );
+    } on Object catch (error) {
+      _showError(l10n.saveFailed('$error'));
     }
   }
 
@@ -424,15 +546,17 @@ class _WorkspacePageState extends State<WorkspacePage> {
     var cute = context.read<ThemeBloc>().state.cute;
     var font = context.read<ThemeBloc>().state.fontFamily;
     var language = context.read<LocaleBloc>().state.locale.languageCode;
-    const fonts = [
-      'Microsoft YaHei',
-      'Microsoft YaHei UI',
-      'PingFang SC',
-      'Noto Sans CJK SC',
-      'Segoe UI',
-      'sans-serif',
-      'monospace',
-    ];
+    final fonts = kIsWeb
+        ? const ['sans-serif', 'serif', 'monospace']
+        : const [
+            'Microsoft YaHei',
+            'Microsoft YaHei UI',
+            'PingFang SC',
+            'Noto Sans CJK SC',
+            'Segoe UI',
+            'sans-serif',
+            'monospace',
+          ];
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -594,44 +718,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                                 context.read<ToolBloc>().select(tool),
                           ),
                         ),
-                        Expanded(
-                          child: SketchpadCanvas(
-                            onNewDocument: _newTab,
-                            onOpenFile: _openFile,
-                            onSave: () => _saveActive(),
-                            onUndo: documentState.canUndo
-                                ? () => context.read<DocumentBloc>().undo()
-                                : null,
-                            onRedo: documentState.canRedo
-                                ? () => context.read<DocumentBloc>().redo()
-                                : null,
-                            onFitView: () =>
-                                context.read<CanvasBloc>().fitBounds(
-                                  documentState.active.document.contentBounds,
-                                ),
-                            onToggleGrid: () => _updateCanvasSetting(
-                              (canvas) => canvas.toggleGrid(),
-                            ),
-                            onToggleGridSnap: () {
-                              final snapGrid = context
-                                  .read<CanvasBloc>()
-                                  .state
-                                  .snapGrid;
-                              _updateCanvasSetting(
-                                (canvas) => canvas.setSnapGrid(!snapGrid),
-                              );
-                            },
-                            onToggleObjectSnap: () {
-                              final snapObjects = context
-                                  .read<CanvasBloc>()
-                                  .state
-                                  .snapObjects;
-                              _updateCanvasSetting(
-                                (canvas) => canvas.setSnapObjects(!snapObjects),
-                              );
-                            },
-                          ),
-                        ),
+                        const Expanded(child: SketchpadCanvas()),
                         RightDock(
                           cute: themeState.cute,
                           collapsed: _dockCollapsed,
@@ -682,27 +769,17 @@ class _WorkspacePageState extends State<WorkspacePage> {
       ]),
       _topMenu(l10n.menuObject, [
         _menuItem('delete', l10n.deleteSelection, Icons.delete_outline),
+        _menuItem('label', l10n.toolText, Icons.text_fields),
       ]),
       _topMenu(l10n.menuEffects, [
-        _menuItem(
-          'planned',
-          l10n.notImplemented(l10n.menuEffects),
-          Icons.construction,
-        ),
+        _menuItem('measure', l10n.addMeasure, Icons.straighten),
+        _menuItem('animate', l10n.addAnimation, Icons.play_circle_outline),
       ]),
       _topMenu(l10n.menuText, [
-        _menuItem(
-          'planned',
-          l10n.notImplemented(l10n.menuText),
-          Icons.construction,
-        ),
+        _menuItem('label', l10n.toolText, Icons.text_fields),
       ]),
       _topMenu(l10n.menuTable, [
-        _menuItem(
-          'planned',
-          l10n.notImplemented(l10n.menuTable),
-          Icons.construction,
-        ),
+        _menuItem('insertTable', l10n.menuTable, Icons.table_chart_outlined),
       ]),
       _topMenu(l10n.menuTools, [
         _menuItem('settings', l10n.settings, Icons.settings_outlined),
@@ -714,56 +791,55 @@ class _WorkspacePageState extends State<WorkspacePage> {
         _menuItem('about', l10n.about, Icons.info_outline),
       ]),
     ];
-    final compact = MediaQuery.sizeOf(context).width < 1100;
+    final width = MediaQuery.sizeOf(context).width;
     return Container(
-      height: compact ? 68 : 40,
+      height: 44,
       decoration: BoxDecoration(
         color: context.watch<ThemeBloc>().state.cute
-            ? const Color(0xfff3eaf1)
-            : const Color(0xffe4eaf0),
-        border: const Border(bottom: BorderSide(color: Color(0xffb8c3ce))),
+            ? const Color(0xffeadde6)
+            : const Color(0xffd3dde7),
+        border: const Border(
+          bottom: BorderSide(color: Color(0xff8e9eae), width: 1.4),
+        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       child: Row(
         children: [
-          const Icon(Icons.gesture, size: 20, color: Color(0xff914967)),
-          const SizedBox(width: 6),
-          Text(
-            l10n.appTitle,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Color(0xff203548),
+          if (width >= 1100) ...[
+            const Icon(Icons.gesture, size: 20, color: Color(0xff914967)),
+            const SizedBox(width: 6),
+            Text(
+              l10n.appTitle,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xff203548),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: menus),
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: compact
-                ? Wrap(
-                    spacing: 0,
-                    runSpacing: 0,
-                    alignment: WrapAlignment.start,
-                    children: menus,
-                  )
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(children: menus),
-                  ),
-          ),
-          _barButton(
-            Icons.translate,
-            l10n.language,
-            context.read<LocaleBloc>().toggle,
-          ),
-          _barButton(
-            context.read<ThemeBloc>().state.cute
-                ? Icons.auto_awesome
-                : Icons.tune,
-            context.read<ThemeBloc>().state.cute
-                ? l10n.professionalTheme
-                : l10n.cuteTheme,
-            context.read<ThemeBloc>().toggleCute,
-          ),
+          if (width >= 1200) ...[
+            _barButton(
+              Icons.translate,
+              l10n.language,
+              context.read<LocaleBloc>().toggle,
+            ),
+            _barButton(
+              context.read<ThemeBloc>().state.cute
+                  ? Icons.auto_awesome
+                  : Icons.tune,
+              context.read<ThemeBloc>().state.cute
+                  ? l10n.professionalTheme
+                  : l10n.cuteTheme,
+              context.read<ThemeBloc>().toggleCute,
+            ),
+          ],
         ],
       ),
     );
@@ -789,19 +865,19 @@ class _WorkspacePageState extends State<WorkspacePage> {
       onSelected: _onMenuAction,
       itemBuilder: (context) => items,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xfffbfcfd),
-          border: Border.all(color: const Color(0xffb8c3ce)),
+          color: const Color(0xfffdfefe),
+          border: Border.all(color: const Color(0xff8293a3), width: 1.2),
           borderRadius: BorderRadius.circular(3),
         ),
         child: Text(
           label,
           style: const TextStyle(
-            fontSize: 11.5,
-            color: Color(0xff203548),
-            fontWeight: FontWeight.w600,
+            fontSize: 12.5,
+            color: Color(0xff172b3d),
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -810,176 +886,337 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
   Widget _standardBar(AppLocalizations l10n, DocumentState documentState) {
     return Container(
-      height: 43,
+      height: 96,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       decoration: const BoxDecoration(
-        color: Color(0xfffdfdfd),
-        border: Border(bottom: BorderSide(color: Color(0xffd6dade))),
+        color: Color(0xfff5f7f9),
+        border: Border(
+          bottom: BorderSide(color: Color(0xff9ba9b7), width: 1.2),
+        ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          _barButton(Icons.note_add_outlined, l10n.newDocument, _newTab),
-          _barButton(Icons.folder_open_outlined, l10n.open, _openFile),
-          _barButton(Icons.save_outlined, l10n.save, () => _saveActive()),
-          const _BarDivider(),
-          _barButton(
-            Icons.undo,
-            l10n.undo,
-            documentState.canUndo
-                ? () => context.read<DocumentBloc>().undo()
-                : null,
-          ),
-          _barButton(
-            Icons.redo,
-            l10n.redo,
-            documentState.canRedo
-                ? () => context.read<DocumentBloc>().redo()
-                : null,
-          ),
-          const _BarDivider(),
-          BlocBuilder<CanvasBloc, CanvasState>(
-            builder: (context, canvas) {
-              final percent = (canvas.zoom * 100).round();
-              return PopupMenuButton<String>(
-                tooltip: l10n.zoom,
-                onSelected: (value) {
-                  if (value == 'fit') {
-                    context.read<CanvasBloc>().fitBounds(
-                      context
-                          .read<DocumentBloc>()
-                          .state
-                          .active
-                          .document
-                          .contentBounds,
-                    );
-                  } else {
-                    context.read<CanvasBloc>().setZoom(
-                      double.parse(value) / 100,
-                    );
-                  }
-                },
-                itemBuilder: (context) => [
-                  for (final value in [25, 50, 75, 100, 150, 200, 400, 800])
-                    PopupMenuItem(
-                      value: '$value',
-                      height: 32,
-                      child: Text(
-                        '$value%',
-                        style: const TextStyle(fontSize: 11),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _barButton(
+                      Icons.note_add_outlined,
+                      l10n.newDocument,
+                      _newTab,
+                      showLabel: true,
+                    ),
+                    _barButton(
+                      Icons.folder_open_outlined,
+                      l10n.open,
+                      _openFile,
+                      showLabel: true,
+                    ),
+                    _barButton(
+                      Icons.save_outlined,
+                      l10n.save,
+                      () => _saveActive(),
+                      showLabel: true,
+                    ),
+                    const _BarDivider(),
+                    _barButton(
+                      Icons.undo,
+                      l10n.undo,
+                      documentState.canUndo
+                          ? () => context.read<DocumentBloc>().undo()
+                          : null,
+                      showLabel: true,
+                    ),
+                    _barButton(
+                      Icons.redo,
+                      l10n.redo,
+                      documentState.canRedo
+                          ? () => context.read<DocumentBloc>().redo()
+                          : null,
+                      showLabel: true,
+                    ),
+                    const _BarDivider(),
+                    BlocBuilder<CanvasBloc, CanvasState>(
+                      builder: (context, canvas) {
+                        final percent = (canvas.zoom * 100).round();
+                        return PopupMenuButton<String>(
+                          tooltip: l10n.zoom,
+                          onSelected: (value) {
+                            if (value == 'fit') {
+                              context.read<CanvasBloc>().fitBounds(
+                                context
+                                    .read<DocumentBloc>()
+                                    .state
+                                    .active
+                                    .document
+                                    .contentBounds,
+                              );
+                            } else {
+                              context.read<CanvasBloc>().setZoom(
+                                double.parse(value) / 100,
+                              );
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            for (final value in [
+                              25,
+                              50,
+                              75,
+                              100,
+                              150,
+                              200,
+                              400,
+                              800,
+                            ])
+                              PopupMenuItem(
+                                value: '$value',
+                                height: 32,
+                                child: Text(
+                                  '$value%',
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                              ),
+                            PopupMenuItem(
+                              value: 'fit',
+                              height: 32,
+                              child: Text(
+                                l10n.fitView,
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ),
+                          ],
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xfffdfefe),
+                              border: Border.all(
+                                color: const Color(0xff899aaa),
+                                width: 1.1,
+                              ),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '$percent%',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xff203548),
+                                  ),
+                                ),
+                                const Icon(Icons.arrow_drop_down, size: 17),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                    BlocBuilder<CanvasBloc, CanvasState>(
+                      builder: (context, canvas) => DropdownButton<String>(
+                        value: const ['mm', 'cm', 'px'].contains(canvas.unit)
+                            ? canvas.unit
+                            : 'mm',
+                        isDense: true,
+                        underline: const SizedBox.shrink(),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xff203548),
+                          fontWeight: FontWeight.w700,
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'mm', child: Text('mm')),
+                          DropdownMenuItem(value: 'cm', child: Text('cm')),
+                          DropdownMenuItem(value: 'px', child: Text('px')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          _updateCanvasSetting(
+                            (canvas) => canvas.setUnit(value),
+                          );
+                        },
                       ),
                     ),
-                  PopupMenuItem(
-                    value: 'fit',
-                    height: 32,
-                    child: Text(
-                      l10n.fitView,
-                      style: const TextStyle(fontSize: 11),
+                    const _BarDivider(),
+                    BlocBuilder<CanvasBloc, CanvasState>(
+                      builder: (context, canvas) => Row(
+                        children: [
+                          _barButton(
+                            canvas.showGrid ? Icons.grid_on : Icons.grid_off,
+                            l10n.grid,
+                            () => _updateCanvasSetting(
+                              (bloc) => bloc.toggleGrid(),
+                            ),
+                            active: canvas.showGrid,
+                            showLabel: true,
+                          ),
+                          _barButton(
+                            Icons.grid_4x4,
+                            l10n.snapGrid,
+                            () => _updateCanvasSetting(
+                              (bloc) => bloc.setSnapGrid(!canvas.snapGrid),
+                            ),
+                            key: const ValueKey('toolbar-snap-grid'),
+                            active: canvas.snapGrid,
+                            showLabel: true,
+                          ),
+                          _barButton(
+                            Icons.hub_outlined,
+                            l10n.snapObjects,
+                            () => _updateCanvasSetting(
+                              (bloc) =>
+                                  bloc.setSnapObjects(!canvas.snapObjects),
+                            ),
+                            key: const ValueKey('toolbar-snap-objects'),
+                            active: canvas.snapObjects,
+                            showLabel: true,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xffd4dbe2)),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const Divider(height: 1, thickness: 1),
+          SizedBox(
+            height: 43,
+            child: BlocBuilder<ToolBloc, ToolState>(
+              builder: (context, toolState) {
+                final tools = <(MoeTool, String, IconData)>[
+                  (MoeTool.select, l10n.toolSelect, Icons.near_me_outlined),
+                  (MoeTool.point, l10n.toolPoint, Icons.circle),
+                  (MoeTool.segment, l10n.toolSegment, Icons.show_chart),
+                  (MoeTool.line, l10n.toolLine, Icons.horizontal_rule),
+                  (MoeTool.circle, l10n.toolCircle, Icons.circle_outlined),
+                  (MoeTool.triangle, l10n.toolTriangle, Icons.change_history),
+                  (MoeTool.polygon, l10n.toolPolygon, Icons.pentagon_outlined),
+                  (MoeTool.function, l10n.toolFunction, Icons.functions),
+                  (MoeTool.text, l10n.toolText, Icons.text_fields),
+                  (MoeTool.pan, l10n.toolPan, Icons.pan_tool_alt_outlined),
+                  (MoeTool.zoom, l10n.toolZoom, Icons.zoom_in),
+                  (MoeTool.rectangle, l10n.toolRectangle, Icons.crop_square),
+                  (MoeTool.ellipse, l10n.toolEllipse, Icons.circle_outlined),
+                  (MoeTool.freehand, l10n.toolFreehand, Icons.gesture),
+                  (MoeTool.fill, l10n.toolFill, Icons.format_color_fill),
+                  (MoeTool.transparency, l10n.toolTransparency, Icons.opacity),
+                  (MoeTool.eyedropper, l10n.toolEyedropper, Icons.colorize),
+                  (MoeTool.outline, l10n.toolOutline, Icons.line_weight),
+                ];
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      Text('$percent%', style: const TextStyle(fontSize: 11)),
-                      const Icon(Icons.arrow_drop_down, size: 15),
+                      for (final (tool, label, icon) in tools)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: _toolShortcut(
+                            tool,
+                            label,
+                            icon,
+                            selected: toolState.active == tool,
+                          ),
+                        ),
                     ],
                   ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 6),
-          BlocBuilder<CanvasBloc, CanvasState>(
-            builder: (context, canvas) => DropdownButton<String>(
-              value: const ['mm', 'cm', 'px'].contains(canvas.unit)
-                  ? canvas.unit
-                  : 'mm',
-              isDense: true,
-              underline: const SizedBox.shrink(),
-              style: const TextStyle(fontSize: 11, color: Color(0xff34495d)),
-              items: const [
-                DropdownMenuItem(value: 'mm', child: Text('mm')),
-                DropdownMenuItem(value: 'cm', child: Text('cm')),
-                DropdownMenuItem(value: 'px', child: Text('px')),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                _updateCanvasSetting((canvas) => canvas.setUnit(value));
+                );
               },
             ),
-          ),
-          const _BarDivider(),
-          BlocBuilder<CanvasBloc, CanvasState>(
-            builder: (context, canvas) => Row(
-              children: [
-                _barButton(
-                  canvas.showGrid ? Icons.grid_on : Icons.grid_off,
-                  l10n.grid,
-                  () => _updateCanvasSetting((bloc) => bloc.toggleGrid()),
-                  active: canvas.showGrid,
-                ),
-                _barButton(
-                  Icons.grid_4x4,
-                  l10n.snapGrid,
-                  () => _updateCanvasSetting(
-                    (bloc) => bloc.setSnapGrid(!canvas.snapGrid),
-                  ),
-                  active: canvas.snapGrid,
-                ),
-                _barButton(
-                  Icons.hub_outlined,
-                  l10n.snapObjects,
-                  () => _updateCanvasSetting(
-                    (bloc) => bloc.setSnapObjects(!canvas.snapObjects),
-                  ),
-                  active: canvas.snapObjects,
-                ),
-              ],
-            ),
-          ),
-          const Spacer(),
-          Text(
-            l10n.experimental,
-            style: const TextStyle(fontSize: 9, color: Color(0xff9a7a85)),
           ),
         ],
       ),
     );
   }
 
+  Widget _toolShortcut(
+    MoeTool tool,
+    String label,
+    IconData icon, {
+    required bool selected,
+  }) => OutlinedButton.icon(
+    key: ValueKey('top-tool-${tool.name}'),
+    onPressed: () => context.read<ToolBloc>().select(tool),
+    icon: Icon(icon, size: 17),
+    label: Text(
+      label,
+      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+    ),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: selected
+          ? const Color(0xff174f78)
+          : const Color(0xff263b4f),
+      backgroundColor: selected
+          ? const Color(0xffdcecf8)
+          : const Color(0xfffbfcfd),
+      minimumSize: const Size(0, 38),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      side: BorderSide(
+        color: selected ? const Color(0xff477da5) : const Color(0xff899aaa),
+        width: selected ? 1.5 : 1.1,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+      visualDensity: VisualDensity.compact,
+    ),
+  );
+
   Widget _barButton(
     IconData icon,
     String tooltip,
     VoidCallback? onPressed, {
     bool active = false,
+    bool showLabel = false,
+    Key? key,
   }) {
+    final foreground = active
+        ? const Color(0xff164f79)
+        : const Color(0xff263b4f);
+    final background = active
+        ? const Color(0xffdcecf8)
+        : const Color(0xfffbfcfd);
+    final border = active ? const Color(0xff477da5) : const Color(0xff899aaa);
+    if (showLabel) {
+      return OutlinedButton.icon(
+        key: key,
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18),
+        label: Text(
+          tooltip,
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: foreground,
+          backgroundColor: background,
+          minimumSize: const Size(0, 38),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          side: BorderSide(color: border, width: active ? 1.4 : 1.1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+          visualDensity: VisualDensity.compact,
+        ),
+      );
+    }
+    final buttonStyle = IconButton.styleFrom(
+      foregroundColor: foreground,
+      backgroundColor: background,
+      side: BorderSide(color: border, width: active ? 1.4 : 1.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+    );
     return IconButton(
+      key: key,
       tooltip: tooltip,
       onPressed: onPressed,
       icon: Icon(icon, size: 18),
       visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-      style: IconButton.styleFrom(
-        foregroundColor: active
-            ? const Color(0xff164f79)
-            : const Color(0xff263b4f),
-        backgroundColor: active
-            ? const Color(0xffdcecf8)
-            : const Color(0xfffbfcfd),
-        side: BorderSide(
-          color: active ? const Color(0xff6394b9) : const Color(0xffb8c3ce),
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
-        padding: const EdgeInsets.all(5),
-      ),
+      constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+      style: buttonStyle,
     );
   }
 
@@ -989,18 +1226,26 @@ class _WorkspacePageState extends State<WorkspacePage> {
         ? null
         : documentState.active.document.objectById(selection.primary!);
     return Container(
-      height: 38,
+      height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: const BoxDecoration(
-        color: Color(0xfff6f7f9),
-        border: Border(bottom: BorderSide(color: Color(0xffd6dade))),
+        color: Color(0xffe8eef4),
+        border: Border(
+          bottom: BorderSide(color: Color(0xff8798a9), width: 1.2),
+        ),
       ),
       child: Row(
         children: [
           if (object == null) ...[
+            const Icon(Icons.tune, size: 17, color: Color(0xff315775)),
+            const SizedBox(width: 6),
             Text(
-              l10n.contextCanvas,
-              style: const TextStyle(fontSize: 11, color: Color(0xff556779)),
+              '${l10n.contextCanvas} · ${l10n.geometrySettings}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xff203548),
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const Spacer(),
             BlocBuilder<CanvasBloc, CanvasState>(
@@ -1009,7 +1254,11 @@ class _WorkspacePageState extends State<WorkspacePage> {
                   _number(canvas.origin.x),
                   _number(canvas.origin.y),
                 ),
-                style: const TextStyle(fontSize: 10, color: Color(0xff7a8897)),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xff455b70),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ] else ...[

@@ -18,28 +18,7 @@ import '../../l10n/app_localizations.dart';
 import 'canvas_painters.dart';
 
 class SketchpadCanvas extends StatefulWidget {
-  const SketchpadCanvas({
-    super.key,
-    required this.onNewDocument,
-    required this.onOpenFile,
-    required this.onSave,
-    required this.onUndo,
-    required this.onRedo,
-    required this.onFitView,
-    required this.onToggleGrid,
-    required this.onToggleGridSnap,
-    required this.onToggleObjectSnap,
-  });
-
-  final VoidCallback onNewDocument;
-  final VoidCallback onOpenFile;
-  final VoidCallback onSave;
-  final VoidCallback? onUndo;
-  final VoidCallback? onRedo;
-  final VoidCallback onFitView;
-  final VoidCallback onToggleGrid;
-  final VoidCallback onToggleGridSnap;
-  final VoidCallback onToggleObjectSnap;
+  const SketchpadCanvas({super.key});
 
   @override
   State<SketchpadCanvas> createState() => _SketchpadCanvasState();
@@ -49,6 +28,8 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
   final GlobalKey _canvasKey = GlobalKey();
   final FocusNode _focusNode = FocusNode(debugLabel: 'canvas');
   final List<Point2> _draftPoints = <Point2>[];
+  final List<Point2> _freehandPoints = <Point2>[];
+  Offset? _freehandScreen;
   Offset? _rubberStart;
   Offset? _rubberCurrent;
   GeometryDocument? _dragBefore;
@@ -260,22 +241,75 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
       case MoeTool.function:
         _showFunctionDialog(snapped);
       case MoeTool.pan:
+        break;
       case MoeTool.zoom:
-      case MoeTool.text:
+        context.read<CanvasBloc>().zoomAt(details.localPosition, 1.35);
       case MoeTool.rectangle:
       case MoeTool.ellipse:
+        _draftPoints.add(snapped);
+        if (_draftPoints.length == 2) {
+          final first = _draftPoints.first;
+          final second = _draftPoints.last;
+          if (_isDegeneratePair(first, second, canvas)) {
+            _draftPoints.clear();
+            _showDegenerateGeometry();
+            setState(() {});
+            return;
+          }
+          final left = math.min(first.x, second.x);
+          final right = math.max(first.x, second.x);
+          final top = math.min(first.y, second.y);
+          final bottom = math.max(first.y, second.y);
+          final id = '${tool.name}-${DateTime.now().microsecondsSinceEpoch}';
+          if (tool == MoeTool.rectangle) {
+            _addObject(
+              GeometryObject(
+                id: id,
+                kind: GeometryKind.polygon,
+                points: [
+                  Point2(left, top),
+                  Point2(right, top),
+                  Point2(right, bottom),
+                  Point2(left, bottom),
+                ],
+                params: const {'shape': 'rectangle'},
+                style: const ObjectStyle(fillColor: 0x1f296fa8),
+              ),
+            );
+          } else {
+            final center = Point2((left + right) / 2, (top + bottom) / 2);
+            final rx = (right - left) / 2;
+            final ry = (bottom - top) / 2;
+            _addObject(
+              GeometryObject(
+                id: id,
+                kind: GeometryKind.conic,
+                points: [center, Point2(left, top), Point2(right, bottom)],
+                params: {
+                  'conicType': 'ellipse',
+                  'a': rx,
+                  'b': ry,
+                  'rotation': 0,
+                },
+                style: const ObjectStyle(fillColor: 0x1f296fa8),
+              ),
+            );
+          }
+          _draftPoints.clear();
+        }
+        setState(() {});
+      case MoeTool.text:
+        _showTextDialog(snapped);
       case MoeTool.freehand:
+        break;
       case MoeTool.fill:
+        _applyFill(world);
       case MoeTool.transparency:
+        _editOpacity(world);
       case MoeTool.eyedropper:
+        _sampleStroke(world);
       case MoeTool.outline:
-        if (tool == MoeTool.zoom) {
-          context.read<CanvasBloc>().zoomAt(details.localPosition, 1.35);
-          return;
-        }
-        if (!tool.implementsGeometry) {
-          _showUnsupported(tool);
-        }
+        _editOutline(world);
     }
   }
 
@@ -293,163 +327,235 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
     );
   }
 
-  Widget _quickToolbar(AppLocalizations l10n) {
-    const tools = [
-      (MoeTool.select, Icons.near_me_outlined),
-      (MoeTool.point, Icons.circle),
-      (MoeTool.segment, Icons.show_chart),
-      (MoeTool.line, Icons.horizontal_rule),
-      (MoeTool.circle, Icons.circle_outlined),
-      (MoeTool.triangle, Icons.change_history),
-      (MoeTool.polygon, Icons.pentagon_outlined),
-      (MoeTool.function, Icons.functions),
-      (MoeTool.pan, Icons.pan_tool_alt_outlined),
-      (MoeTool.zoom, Icons.zoom_in),
+  List<GeometryObject> _styleTargets(GeometryDocument document, Point2 world) {
+    final selection = context.read<SelectionBloc>().state.ids;
+    if (selection.isNotEmpty) {
+      return [for (final id in selection) ?document.objectById(id)];
+    }
+    final hit = _spatialIndex(document).hitTest(
+      world,
+      tolerance:
+          context.read<CanvasBloc>().state.snapTolerancePx /
+          context.read<CanvasBloc>().state.zoom,
+      filter: (object) => object.visible && !object.locked,
+    );
+    if (hit == null) return const [];
+    context.read<SelectionBloc>().replace(hit.id);
+    return [hit];
+  }
+
+  void _updateStyles(
+    List<GeometryObject> targets,
+    ObjectStyle Function(ObjectStyle style) update,
+  ) {
+    if (targets.isEmpty) return;
+    var document = context.read<DocumentBloc>().state.active.document;
+    for (final object in targets) {
+      document = document.withObject(
+        object.copyWith(style: update(object.style)),
+      );
+    }
+    context.read<DocumentBloc>().commitDocument(document);
+  }
+
+  Future<void> _applyFill(Point2 world) async {
+    final document = context.read<DocumentBloc>().state.active.document;
+    final targets = _styleTargets(document, world);
+    if (targets.isEmpty) return;
+    const colors = <int>[
+      0xffdcecf8,
+      0xffffe1ed,
+      0xffffefc2,
+      0xffdff2df,
+      0xffe9e0fa,
+      0xffffffff,
     ];
-    String name(MoeTool tool) => switch (tool) {
-      MoeTool.select => l10n.toolSelect,
-      MoeTool.point => l10n.toolPoint,
-      MoeTool.segment => l10n.toolSegment,
-      MoeTool.line => l10n.toolLine,
-      MoeTool.circle => l10n.toolCircle,
-      MoeTool.triangle => l10n.toolTriangle,
-      MoeTool.polygon => l10n.toolPolygon,
-      MoeTool.function => l10n.toolFunction,
-      MoeTool.pan => l10n.toolPan,
-      MoeTool.zoom => l10n.toolZoom,
-      _ => tool.name,
-    };
-    final active = context.watch<ToolBloc>().state.active;
-    final canvas = context.watch<CanvasBloc>().state;
-    Widget quickButton({
-      required String key,
-      required String label,
-      required IconData icon,
-      required VoidCallback? onPressed,
-      bool selected = false,
-    }) => OutlinedButton.icon(
-      key: ValueKey(key),
-      onPressed: onPressed,
-      icon: Icon(icon, size: 15),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(0, 34),
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-        visualDensity: VisualDensity.compact,
-        foregroundColor: selected
-            ? const Color(0xff164f79)
-            : const Color(0xff263b4f),
-        backgroundColor: selected ? const Color(0xffdcecf8) : Colors.white,
-        disabledForegroundColor: const Color(0xff758391),
-        side: BorderSide(
-          color: selected ? const Color(0xff5d93bd) : const Color(0xffaebbc7),
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
-      ),
-    );
-    return Align(
-      alignment: Alignment.topLeft,
-      child: Container(
-        key: const ValueKey('canvas-quick-toolbar'),
-        padding: const EdgeInsets.all(5),
-        decoration: BoxDecoration(
-          color: const Color(0xfffdfefe),
-          border: Border.all(color: const Color(0xff8196a8), width: 1.2),
-          borderRadius: BorderRadius.circular(5),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x26000000),
-              blurRadius: 5,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final selectedColor = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(AppLocalizations.of(context).toolFill),
+        content: Wrap(
+          spacing: 10,
+          runSpacing: 10,
           children: [
-            Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: [
-                quickButton(
-                  key: 'canvas-action-new',
-                  label: l10n.newDocument,
-                  icon: Icons.note_add_outlined,
-                  onPressed: widget.onNewDocument,
-                ),
-                quickButton(
-                  key: 'canvas-action-open',
-                  label: l10n.open,
-                  icon: Icons.folder_open_outlined,
-                  onPressed: widget.onOpenFile,
-                ),
-                quickButton(
-                  key: 'canvas-action-save',
-                  label: l10n.save,
-                  icon: Icons.save_outlined,
-                  onPressed: widget.onSave,
-                ),
-                quickButton(
-                  key: 'canvas-action-undo',
-                  label: l10n.undo,
-                  icon: Icons.undo,
-                  onPressed: widget.onUndo,
-                ),
-                quickButton(
-                  key: 'canvas-action-redo',
-                  label: l10n.redo,
-                  icon: Icons.redo,
-                  onPressed: widget.onRedo,
-                ),
-                quickButton(
-                  key: 'canvas-action-fit',
-                  label: l10n.fitView,
-                  icon: Icons.fit_screen,
-                  onPressed: widget.onFitView,
-                ),
-                quickButton(
-                  key: 'canvas-action-grid',
-                  label: l10n.grid,
-                  icon: Icons.grid_4x4,
-                  onPressed: widget.onToggleGrid,
-                  selected: canvas.showGrid,
-                ),
-                quickButton(
-                  key: 'canvas-action-grid-snap',
-                  label: l10n.snapGrid,
-                  icon: Icons.grid_on,
-                  onPressed: widget.onToggleGridSnap,
-                  selected: canvas.snapGrid,
-                ),
-                quickButton(
-                  key: 'canvas-action-object-snap',
-                  label: l10n.snapObjects,
-                  icon: Icons.hub_outlined,
-                  onPressed: widget.onToggleObjectSnap,
-                  selected: canvas.snapObjects,
-                ),
-              ],
-            ),
-            const Divider(height: 10, thickness: 1),
-            Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: [
-                for (final (tool, icon) in tools)
-                  quickButton(
-                    key: 'canvas-quick-tool-${tool.name}',
-                    label: name(tool),
-                    icon: icon,
-                    onPressed: () => context.read<ToolBloc>().select(tool),
-                    selected: active == tool,
+            for (final color in colors)
+              InkWell(
+                key: ValueKey('fill-color-$color'),
+                onTap: () => Navigator.of(dialogContext).pop(color),
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: Color(color),
+                    border: Border.all(color: const Color(0xff536878)),
+                    borderRadius: BorderRadius.circular(4),
                   ),
-              ],
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(AppLocalizations.of(context).cancel),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || selectedColor == null) return;
+    _updateStyles(targets, (style) => style.copyWith(fillColor: selectedColor));
+  }
+
+  Future<void> _editOpacity(Point2 world) async {
+    final document = context.read<DocumentBloc>().state.active.document;
+    final targets = _styleTargets(document, world);
+    if (targets.isEmpty) return;
+    var opacity = targets.first.style.opacity;
+    final result = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(AppLocalizations.of(context).toolTransparency),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Slider(
+                key: const ValueKey('tool-opacity-slider'),
+                value: opacity,
+                onChanged: (value) => setDialogState(() => opacity = value),
+              ),
+              Text('${(opacity * 100).round()}%'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(AppLocalizations.of(context).cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(opacity),
+              child: Text(AppLocalizations.of(context).save),
             ),
           ],
         ),
       ),
     );
+    if (result == null || !mounted) return;
+    _updateStyles(targets, (style) => style.copyWith(opacity: result));
+  }
+
+  void _sampleStroke(Point2 world) {
+    final document = context.read<DocumentBloc>().state.active.document;
+    final hit = _spatialIndex(document).hitTest(
+      world,
+      tolerance:
+          context.read<CanvasBloc>().state.snapTolerancePx /
+          context.read<CanvasBloc>().state.zoom,
+      filter: (object) => object.visible,
+    );
+    if (hit == null) return;
+    final targets = _styleTargets(document, world);
+    if (targets.length == 1 && targets.first.id == hit.id) return;
+    _updateStyles(
+      targets,
+      (style) => style.copyWith(strokeColor: hit.style.strokeColor),
+    );
+  }
+
+  Future<void> _editOutline(Point2 world) async {
+    final document = context.read<DocumentBloc>().state.active.document;
+    final targets = _styleTargets(document, world);
+    if (targets.isEmpty) return;
+    var width = targets.first.style.strokeWidth.clamp(0.5, 12.0);
+    final result = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(AppLocalizations.of(context).toolOutline),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Slider(
+                key: const ValueKey('tool-outline-slider'),
+                min: 0.5,
+                max: 12,
+                value: width,
+                onChanged: (value) => setDialogState(() => width = value),
+              ),
+              Text('${width.toStringAsFixed(1)} px'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(AppLocalizations.of(context).cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(width),
+              child: Text(AppLocalizations.of(context).save),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    _updateStyles(targets, (style) => style.copyWith(strokeWidth: result));
+  }
+
+  Future<void> _showTextDialog(Point2 at) async {
+    final documentBloc = context.read<DocumentBloc>();
+    final selection = context.read<SelectionBloc>().state;
+    final selected = selection.primary == null
+        ? null
+        : documentBloc.state.active.document.objectById(selection.primary!);
+    final controller = TextEditingController(text: selected?.label ?? '');
+    try {
+      final value = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(AppLocalizations.of(context).toolText),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 512,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: 'A',
+            ),
+            onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(AppLocalizations.of(context).cancel),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text.trim()),
+              child: Text(AppLocalizations.of(context).save),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || value == null || value.trim().isEmpty) return;
+      if (selected != null) {
+        documentBloc.setLabel(selected.id, value.trim());
+      } else {
+        documentBloc.addObject(
+          GeometryObject(
+            id: 'text-${DateTime.now().microsecondsSinceEpoch}',
+            kind: GeometryKind.point,
+            points: [at],
+            label: value.trim(),
+            labelStyle: const LabelStyle(italic: false, fontSize: 18),
+            style: const ObjectStyle(strokeColor: 0xff203548),
+            params: const {'hideMarker': true},
+          ),
+        );
+      }
+    } finally {
+      controller.dispose();
+    }
   }
 
   int _pointCount(GeometryDocument document) => document.objects
@@ -474,42 +580,19 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
     setState(_draftPoints.clear);
   }
 
-  void _showUnsupported(MoeTool tool) {
-    final l10n = AppLocalizations.of(context);
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        content: Text(l10n.toolNotImplemented(_toolName(l10n, tool))),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  String _toolName(AppLocalizations l10n, MoeTool tool) => switch (tool) {
-    MoeTool.select => l10n.toolSelect,
-    MoeTool.point => l10n.toolPoint,
-    MoeTool.segment => l10n.toolSegment,
-    MoeTool.line => l10n.toolLine,
-    MoeTool.circle => l10n.toolCircle,
-    MoeTool.triangle => l10n.toolTriangle,
-    MoeTool.polygon => l10n.toolPolygon,
-    MoeTool.function => l10n.toolFunction,
-    MoeTool.text => l10n.toolText,
-    MoeTool.pan => l10n.toolPan,
-    MoeTool.zoom => l10n.toolZoom,
-    MoeTool.rectangle => l10n.toolRectangle,
-    MoeTool.ellipse => l10n.toolEllipse,
-    MoeTool.freehand => l10n.toolFreehand,
-    MoeTool.fill => l10n.toolFill,
-    MoeTool.transparency => l10n.toolTransparency,
-    MoeTool.eyedropper => l10n.toolEyedropper,
-    MoeTool.outline => l10n.toolOutline,
-  };
-
   void _handlePanStart(DragStartDetails details) {
     _focusNode.requestFocus();
     final tool = context.read<ToolBloc>().state.active;
     final canvas = context.read<CanvasBloc>().state;
     final document = context.read<DocumentBloc>().state.active.document;
+    if (tool == MoeTool.freehand) {
+      _freehandPoints
+        ..clear()
+        ..add(canvas.screenToWorld(details.localPosition));
+      _freehandScreen = details.localPosition;
+      setState(() {});
+      return;
+    }
     if (tool == MoeTool.pan ||
         tool == MoeTool.select &&
             HardwareKeyboard.instance.logicalKeysPressed.contains(
@@ -546,6 +629,16 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
   void _handlePanUpdate(DragUpdateDetails details) {
     final tool = context.read<ToolBloc>().state.active;
     final canvas = context.read<CanvasBloc>().state;
+    if (tool == MoeTool.freehand && _freehandPoints.isNotEmpty) {
+      final point = canvas.screenToWorld(details.localPosition);
+      if (_freehandScreen == null ||
+          (details.localPosition - _freehandScreen!).distance >= 2) {
+        if (_freehandPoints.length < 512) _freehandPoints.add(point);
+        _freehandScreen = details.localPosition;
+        setState(() {});
+      }
+      return;
+    }
     if (tool == MoeTool.pan ||
         (tool == MoeTool.select &&
             HardwareKeyboard.instance.logicalKeysPressed.contains(
@@ -577,6 +670,25 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
   }
 
   void _handlePanEnd(DragEndDetails details) {
+    if (_freehandPoints.length > 1) {
+      final document = context.read<DocumentBloc>().state.active.document;
+      final now = DateTime.now().microsecondsSinceEpoch;
+      var updated = document;
+      for (var i = 1; i < _freehandPoints.length; i++) {
+        updated = updated.withObject(
+          GeometryObject(
+            id: 'freehand-$now-$i',
+            kind: GeometryKind.segment,
+            points: [_freehandPoints[i - 1], _freehandPoints[i]],
+            params: const {'freehand': true},
+            style: const ObjectStyle(strokeColor: 0xff263b4f, strokeWidth: 2),
+          ),
+        );
+      }
+      context.read<DocumentBloc>().commitDocument(updated);
+    }
+    _freehandPoints.clear();
+    _freehandScreen = null;
     if (_dragObjectId != null && _dragBefore != null && _dragDocument != null) {
       context.read<DocumentBloc>().commitDrag(_dragBefore!, _dragDocument!);
       _clearDrag();
@@ -667,7 +779,6 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     final cute = context.select((ThemeBloc bloc) => bloc.state.cute);
     context.watch<ToolBloc>();
     return BlocListener<ToolBloc, ToolState>(
@@ -828,7 +939,10 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
                                                     canvasState: canvasState,
                                                     selectedIds: selection,
                                                     document: document,
-                                                    draftPoints: _draftPoints,
+                                                    draftPoints: [
+                                                      ..._draftPoints,
+                                                      ..._freehandPoints,
+                                                    ],
                                                     cute: cute,
                                                     rubberBand:
                                                         _rubberStart != null &&
@@ -884,57 +998,8 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
                                                     ),
                                                   ),
                                                 ),
-                                              Positioned(
-                                                right: 10,
-                                                bottom: 10,
-                                                child: IgnorePointer(
-                                                  child: DecoratedBox(
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(
-                                                        0xfffdfefe,
-                                                      ),
-                                                      border: Border.all(
-                                                        color: const Color(
-                                                          0xffaebbc7,
-                                                        ),
-                                                      ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            4,
-                                                          ),
-                                                    ),
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 7,
-                                                            vertical: 4,
-                                                          ),
-                                                      child: Text(
-                                                        _hint(
-                                                          l10n,
-                                                          canvasState,
-                                                        ),
-                                                        style: const TextStyle(
-                                                          fontSize: 10,
-                                                          color: Color(
-                                                            0xff263b4f,
-                                                          ),
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
                                             ],
                                           ),
-                                        ),
-                                        Positioned(
-                                          top: 8,
-                                          left: 8,
-                                          right: 8,
-                                          child: _quickToolbar(l10n),
                                         ),
                                       ],
                                     ),
@@ -996,20 +1061,6 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
       }
     }
     return null;
-  }
-
-  String _hint(AppLocalizations l10n, CanvasState canvas) {
-    final tool = context.read<ToolBloc>().state.active;
-    return switch (tool) {
-      MoeTool.point => l10n.statusToolHintPoint,
-      MoeTool.segment => l10n.statusToolHintSegment,
-      MoeTool.line => l10n.statusToolHintLine,
-      MoeTool.circle => l10n.statusToolHintCircle,
-      MoeTool.triangle => l10n.statusToolHintTriangle,
-      MoeTool.polygon => l10n.statusToolHintPolygon,
-      MoeTool.pan => l10n.statusToolHintPan,
-      _ => l10n.statusToolHintSelect,
-    };
   }
 
   MouseCursor _cursor(CanvasState canvas, BuildContext context) {

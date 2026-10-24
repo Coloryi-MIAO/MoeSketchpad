@@ -309,10 +309,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get passwordTitle => '文档密码';
 
   @override
-  String get passwordOpenLabel => '输入 .msp 文档密码';
+  String get passwordOpenLabel => '输入 .moesp 文档密码';
 
   @override
-  String get passwordSaveLabel => '为 .msp 文档设置密码（不能为空）';
+  String get passwordSaveLabel => '为 .moesp 文档设置密码（不能为空）';
 
   @override
   String get passwordTooShort => '密码不能为空。';

@@ -313,11 +313,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passwordTitle => 'Document password';
 
   @override
-  String get passwordOpenLabel => 'Enter the .msp document password';
+  String get passwordOpenLabel => 'Enter the .moesp document password';
 
   @override
   String get passwordSaveLabel =>
-      'Set a non-empty password for the .msp document';
+      'Set a non-empty password for the .moesp document';
 
   @override
   String get passwordTooShort => 'Password must not be empty.';

@@ -7,7 +7,7 @@
     "display": "standalone",
     "background_color": "#eef1f6",
     "theme_color": "#9d4f70",
-    "description": "跨平台动态几何画板，支持平面几何、函数、圆锥曲线、动点动画与加密 .msp 文档。",
+    "description": "跨平台动态几何画板，支持平面几何、函数、圆锥曲线、动点动画与加密 .moesp 文档。",
     "orientation": "any",
     "prefer_related_applications": false,
     "icons": [

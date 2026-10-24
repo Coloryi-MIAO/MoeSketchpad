@@ -105,8 +105,8 @@ class CreateCommand extends Command<int> {
       throw CliFailure(
         exitUsage,
         globals.t(
-          '用法：msp create <primitive> [options] [--file doc.msp]',
-          'Usage: msp create <primitive> [options] [--file doc.msp]',
+          '用法：msp create <primitive> [options] [--file doc.moesp]',
+          'Usage: msp create <primitive> [options] [--file doc.moesp]',
         ),
       );
     }
@@ -180,8 +180,8 @@ class ConstraintCommand extends Command<int> {
       throw CliFailure(
         exitUsage,
         globals.t(
-          '用法：msp constraint <type> <target...> [--value=n] --file doc.msp',
-          'Usage: msp constraint <type> <target...> [--value=n] --file doc.msp',
+          '用法：msp constraint <type> <target...> [--value=n] --file doc.moesp',
+          'Usage: msp constraint <type> <target...> [--value=n] --file doc.moesp',
         ),
       );
     }
@@ -320,7 +320,7 @@ class LabelCommand extends Command<int> {
     if (!auto && target == null) {
       throw CliFailure(
         exitUsage,
-        'Usage: msp label <target> --text=A --file doc.msp',
+        'Usage: msp label <target> --text=A --file doc.moesp',
       );
     }
     var font = 14.0;
@@ -568,7 +568,7 @@ class AnimateCommand extends Command<int> {
       throw CliFailure(
         exitUsage,
         'Usage: msp animate <point> --path=<obj> --t=0..1 --speed=1 '
-        '--loop|--pingpong --trail=20 --file doc.msp',
+        '--loop|--pingpong --trail=20 --file doc.moesp',
       );
     }
     final target = argResults!.rest.single;
@@ -796,7 +796,7 @@ class ValidateCommand extends Command<int> {
 
   @override
   String get description => globals.t(
-    '校验 .msp 文件结构或完整认证',
+    '校验 .moesp 文件结构或完整认证',
     'Validate MSP structure or full authentication',
   );
 
@@ -805,7 +805,7 @@ class ValidateCommand extends Command<int> {
     final paths = [...argResults!.rest];
     final path = paths.isEmpty ? globals.file : paths.first;
     if (path == null) {
-      throw CliFailure(exitUsage, 'Usage: msp validate <file.msp> [--deep]');
+      throw CliFailure(exitUsage, 'Usage: msp validate <file.moesp> [--deep]');
     }
     final file = File(path);
     if (!await file.exists()) {
@@ -876,7 +876,7 @@ class InspectCommand extends Command<int> {
         ? argResults!.rest.first
         : globals.file;
     if (path == null) {
-      throw CliFailure(exitUsage, 'Usage: msp inspect <file.msp> [--header]');
+      throw CliFailure(exitUsage, 'Usage: msp inspect <file.moesp> [--header]');
     }
     final bytes = await File(path).readAsBytes();
     try {
@@ -970,7 +970,7 @@ class ConvertCommand extends Command<int> {
     final inputExtension = p.extension(input.path).toLowerCase();
     final to =
         argResults!['to'] as String? ??
-        (inputExtension == '.msp' ? 'json' : 'msp');
+        (inputExtension == '.moesp' ? 'json' : 'msp');
     final outputPath = argResults!['output'] as String?;
     if (outputPath == null) {
       throw CliFailure(exitUsage, '--output is required.');
@@ -985,8 +985,8 @@ class ConvertCommand extends Command<int> {
     final codec = MspCodec();
     GeometryDocument document;
     if (to == 'json') {
-      if (inputExtension != '.msp') {
-        throw CliFailure(exitFormat, 'JSON output requires an .msp input.');
+      if (inputExtension != '.moesp') {
+        throw CliFailure(exitFormat, 'JSON output requires an .moesp input.');
       }
       try {
         document = await codec.decode(
@@ -1081,7 +1081,7 @@ class ExportCommand extends Command<int> {
     if (argResults!.rest.length != 1) {
       throw CliFailure(
         exitUsage,
-        'Usage: msp export <file.msp> --format=svg|json --output=<path>',
+        'Usage: msp export <file.moesp> --format=svg|json --output=<path>',
       );
     }
     final format = argResults!['format'] as String;

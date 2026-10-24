@@ -20,6 +20,13 @@ class FileService {
     required Uint8List bytes,
   }) async => null;
 
+  static Future<String?> saveExport({
+    required String suggestedName,
+    required Uint8List bytes,
+    required String extension,
+    required String mimeType,
+  }) async => null;
+
   static Future<void> writeToPath(String path, Uint8List bytes) async {
     throw UnsupportedError('This platform has no writable filesystem paths.');
   }

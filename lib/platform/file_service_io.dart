@@ -8,9 +8,9 @@ import 'file_service_stub.dart' show PickedFile;
 
 const XTypeGroup _moeTypeGroup = XTypeGroup(
   label: 'MoeSketchpad',
-  extensions: ['msp'],
+  extensions: ['moesp'],
   mimeTypes: ['application/x-moesketchpad'],
-  uniformTypeIdentifiers: ['com.coloryi.moesketchpad.msp'],
+  uniformTypeIdentifiers: ['com.coloryi.moesketchpad.moesp'],
 );
 
 class FileService {
@@ -43,6 +43,30 @@ class FileService {
       mimeType: 'application/x-moesketchpad',
     );
     await file.saveTo(location.path);
+    return location.path;
+  }
+
+  static Future<String?> saveExport({
+    required String suggestedName,
+    required Uint8List bytes,
+    required String extension,
+    required String mimeType,
+  }) async {
+    final group = XTypeGroup(
+      label: 'MoeSketchpad export',
+      extensions: [extension],
+      mimeTypes: [mimeType],
+    );
+    final location = await getSaveLocation(
+      suggestedName: suggestedName,
+      acceptedTypeGroups: [group],
+    );
+    if (location == null) return null;
+    await XFile.fromData(
+      bytes,
+      name: suggestedName,
+      mimeType: mimeType,
+    ).saveTo(location.path);
     return location.path;
   }
 

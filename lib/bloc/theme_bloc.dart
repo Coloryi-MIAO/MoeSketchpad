@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class ThemeState {
-  const ThemeState({this.cute = true, this.fontFamily = 'Microsoft YaHei'});
+  const ThemeState({
+    this.cute = true,
+    this.fontFamily = kIsWeb ? 'Arial' : 'Microsoft YaHei',
+  });
 
   final bool cute;
   final String fontFamily;

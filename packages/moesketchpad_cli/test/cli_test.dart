@@ -66,7 +66,7 @@ void main() {
     () async {
       final directory = await Directory.systemTemp.createTemp('msp-cli-');
       addTearDown(() => directory.delete(recursive: true));
-      final filePath = '${directory.path}${Platform.pathSeparator}draft.msp';
+      final filePath = '${directory.path}${Platform.pathSeparator}draft.moesp';
       final missingPassword = await msp([
         'create',
         'point',
@@ -110,7 +110,7 @@ void main() {
     addTearDown(() => directory.delete(recursive: true));
     final workspace = Directory('${directory.path}/workspace');
     await workspace.create();
-    final outsideFile = File('${directory.path}/outside.msp');
+    final outsideFile = File('${directory.path}/outside.moesp');
     await outsideFile.writeAsString('not a document');
 
     final process = await Process.start(Platform.resolvedExecutable, [
@@ -144,7 +144,7 @@ void main() {
         'method': 'tools/call',
         'params': {
           'name': 'msp_validate_file',
-          'arguments': {'path': '../outside.msp'},
+          'arguments': {'path': '../outside.moesp'},
         },
       },
     ]) {

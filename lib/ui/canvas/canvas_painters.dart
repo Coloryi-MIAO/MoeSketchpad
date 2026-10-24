@@ -20,9 +20,9 @@ class CanvasBackgroundPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final state = canvasState;
-    canvas.drawColor(
-      cute ? const Color(0xffeef1f6) : const Color(0xffd9dde2),
-      BlendMode.src,
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = cute ? const Color(0xffeef1f6) : const Color(0xffd9dde2),
     );
     if (state.showGrid) _paintGrid(canvas, size);
   }
@@ -116,7 +116,9 @@ class GeometryPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     switch (object.kind) {
       case GeometryKind.point:
-        _paintPoint(canvas, object.points.first, color);
+        if (object.params['hideMarker'] != true) {
+          _paintPoint(canvas, object.points.first, color);
+        }
       case GeometryKind.segment:
       case GeometryKind.vector:
         final a = canvasState.worldToScreen(object.points[0]);
@@ -248,14 +250,22 @@ class GeometryPainter extends CustomPainter {
       canvas.save();
       canvas.translate(centerScreen.dx, centerScreen.dy);
       canvas.rotate(rotation);
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset.zero,
-          width: a * 2 * canvasState.zoom,
-          height: b * 2 * canvasState.zoom,
-        ),
-        paint,
+      final oval = Rect.fromCenter(
+        center: Offset.zero,
+        width: a * 2 * canvasState.zoom,
+        height: b * 2 * canvasState.zoom,
       );
+      if (object.style.fillColor != null) {
+        canvas.drawOval(
+          oval,
+          Paint()
+            ..color = Color(
+              object.style.fillColor!,
+            ).withValues(alpha: object.style.opacity.clamp(0, 1))
+            ..style = PaintingStyle.fill,
+        );
+      }
+      canvas.drawOval(oval, paint);
       canvas.restore();
       return;
     }

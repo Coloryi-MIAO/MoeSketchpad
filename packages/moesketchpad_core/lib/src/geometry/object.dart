@@ -78,6 +78,21 @@ class ObjectStyle {
   final List<double> dash;
   final double opacity;
 
+  ObjectStyle copyWith({
+    int? strokeColor,
+    int? fillColor,
+    bool clearFillColor = false,
+    double? strokeWidth,
+    List<double>? dash,
+    double? opacity,
+  }) => ObjectStyle(
+    strokeColor: strokeColor ?? this.strokeColor,
+    fillColor: clearFillColor ? null : (fillColor ?? this.fillColor),
+    strokeWidth: strokeWidth ?? this.strokeWidth,
+    dash: dash ?? this.dash,
+    opacity: opacity ?? this.opacity,
+  );
+
   Map<String, Object?> toJson() => {
     'strokeColor': strokeColor,
     if (fillColor != null) 'fillColor': fillColor,

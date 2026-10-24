@@ -677,13 +677,13 @@ abstract class AppLocalizations {
   /// No description provided for @passwordOpenLabel.
   ///
   /// In zh, this message translates to:
-  /// **'输入 .msp 文档密码'**
+  /// **'输入 .moesp 文档密码'**
   String get passwordOpenLabel;
 
   /// No description provided for @passwordSaveLabel.
   ///
   /// In zh, this message translates to:
-  /// **'为 .msp 文档设置密码（不能为空）'**
+  /// **'为 .moesp 文档设置密码（不能为空）'**
   String get passwordSaveLabel;
 
   /// No description provided for @passwordTooShort.

@@ -23,20 +23,6 @@ enum MoeTool {
   outline,
 }
 
-extension MoeToolCapability on MoeTool {
-  bool get implementsGeometry =>
-      this == MoeTool.select ||
-      this == MoeTool.point ||
-      this == MoeTool.segment ||
-      this == MoeTool.line ||
-      this == MoeTool.circle ||
-      this == MoeTool.triangle ||
-      this == MoeTool.polygon ||
-      this == MoeTool.function ||
-      this == MoeTool.pan ||
-      this == MoeTool.zoom;
-}
-
 class ToolState {
   const ToolState({this.active = MoeTool.select, this.polygonDraft = const []});
 

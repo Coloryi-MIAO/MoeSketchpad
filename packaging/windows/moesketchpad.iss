@@ -1,7 +1,7 @@
-# MoeSketchpad Windows installer and .msp file association.
+# MoeSketchpad Windows installer and .moesp file association.
 # Build with Inno Setup 6+ after:
 #   flutter build windows --release
-# The script registers a per-machine association and an image/icon for .msp.
+# The script registers a per-machine association and an image/icon for .moesp.
 ; SPDX-License-Identifier: GPL-3.0-only
 
 #define MyAppName "萌板 / MoeSketchpad"
@@ -37,7 +37,7 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "associate"; Description: "Associate .msp files with MoeSketchpad"; GroupDescription: "Integration:"
+Name: "associate"; Description: "Associate .moesp files with MoeSketchpad"; GroupDescription: "Integration:"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
@@ -53,9 +53,9 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Registry]
-Root: HKCR; Subkey: ".msp"; ValueType: string; ValueName: ""; ValueData: "MoeSketchpad.Document"; Flags: uninsdeletevalue; Tasks: associate
-Root: HKCR; Subkey: ".msp"; ValueType: string; ValueName: "Content Type"; ValueData: "application/x-moesketchpad"; Flags: uninsdeletevalue; Tasks: associate
-Root: HKCR; Subkey: ".msp"; ValueType: string; ValueName: "PerceivedType"; ValueData: "document"; Flags: uninsdeletevalue; Tasks: associate
+Root: HKCR; Subkey: ".moesp"; ValueType: string; ValueName: ""; ValueData: "MoeSketchpad.Document"; Flags: uninsdeletevalue; Tasks: associate
+Root: HKCR; Subkey: ".moesp"; ValueType: string; ValueName: "Content Type"; ValueData: "application/x-moesketchpad"; Flags: uninsdeletevalue; Tasks: associate
+Root: HKCR; Subkey: ".moesp"; ValueType: string; ValueName: "PerceivedType"; ValueData: "document"; Flags: uninsdeletevalue; Tasks: associate
 Root: HKCR; Subkey: "MoeSketchpad.Document"; ValueType: string; ValueName: ""; ValueData: "MoeSketchpad Geometry Document"; Flags: uninsdeletekey; Tasks: associate
 Root: HKCR; Subkey: "MoeSketchpad.Document\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\if.ico,0"; Flags: uninsdeletekey; Tasks: associate
 Root: HKCR; Subkey: "MoeSketchpad.Document\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekey; Tasks: associate

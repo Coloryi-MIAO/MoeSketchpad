@@ -12,14 +12,14 @@ void main() {
       addTearDown(() => directory.delete(recursive: true));
       final workspace = Directory('${directory.path}/workspace');
       await workspace.create();
-      final outside = File('${directory.path}/outside.msp');
+      final outside = File('${directory.path}/outside.moesp');
       await outside.writeAsString('private');
 
       await expectLater(
         requireWorkspaceFile(
           outside.path,
           workspace: workspace.path,
-          requiredExtension: '.msp',
+          requiredExtension: '.moesp',
         ),
         throwsA(
           isA<CliFailure>().having((error) => error.exitCode, 'exitCode', 6),

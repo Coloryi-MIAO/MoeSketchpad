@@ -15,7 +15,7 @@ class FileService {
 
   static Future<PickedFile?> openDocument() async {
     final input = html.FileUploadInputElement()
-      ..accept = '.msp,application/x-moesketchpad'
+      ..accept = '.moesp,application/x-moesketchpad'
       ..style.display = 'none';
     html.document.body?.children.add(input);
     final completer = Completer<PickedFile?>();
@@ -49,6 +49,24 @@ class FileService {
     required Uint8List bytes,
   }) async {
     final blob = html.Blob([bytes], 'application/x-moesketchpad');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    final anchor = html.AnchorElement(href: url)
+      ..download = suggestedName
+      ..style.display = 'none';
+    html.document.body?.children.add(anchor);
+    anchor.click();
+    anchor.remove();
+    html.Url.revokeObjectUrl(url);
+    return suggestedName;
+  }
+
+  static Future<String?> saveExport({
+    required String suggestedName,
+    required Uint8List bytes,
+    required String extension,
+    required String mimeType,
+  }) async {
+    final blob = html.Blob([bytes], mimeType);
     final url = html.Url.createObjectUrlFromBlob(blob);
     final anchor = html.AnchorElement(href: url)
       ..download = suggestedName

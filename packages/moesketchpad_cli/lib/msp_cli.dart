@@ -135,7 +135,7 @@ class MspCli {
           ..writeln()
           ..writeln(globals.t('全局选项：', 'Global options:'))
           ..writeln('  --lang zh|en       --json')
-          ..writeln('  --file <path.msp>  --password-env MSP_PASSWORD')
+          ..writeln('  --file <path.moesp>  --password-env MSP_PASSWORD')
           ..writeln('  --workspace <dir>  --audit-log <path>')
           ..writeln()
           ..writeln(

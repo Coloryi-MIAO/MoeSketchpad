@@ -172,15 +172,15 @@ Future<GeometryDocument> loadDocument(
     }
     throw CliFailure(
       exitUsage,
-      globals.t('缺少 --file <path.msp>。', 'Missing --file <path.msp>.'),
+      globals.t('缺少 --file <path.moesp>。', 'Missing --file <path.moesp>.'),
     );
   }
-  if (p.extension(rawPath).toLowerCase() != '.msp') {
+  if (p.extension(rawPath).toLowerCase() != '.moesp') {
     throw CliFailure(
       exitFormat,
       globals.t(
-        'MoeSketchpad 文档必须使用 .msp 扩展名。',
-        'MoeSketchpad documents must use the .msp extension.',
+        'MoeSketchpad 文档必须使用 .moesp 扩展名。',
+        'MoeSketchpad documents must use the .moesp extension.',
       ),
     );
   }
@@ -227,8 +227,8 @@ Future<void> saveDocument(
   if (rawPath == null) {
     throw CliFailure(exitUsage, 'Missing --file path.');
   }
-  if (p.extension(rawPath).toLowerCase() != '.msp') {
-    throw CliFailure(exitFormat, 'Refusing to write a non-.msp file.');
+  if (p.extension(rawPath).toLowerCase() != '.moesp') {
+    throw CliFailure(exitFormat, 'Refusing to write a non-.moesp file.');
   }
   final password = globals.requirePassword();
   final target = File(rawPath);

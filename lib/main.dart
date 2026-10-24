@@ -9,7 +9,7 @@ Future<void> main(List<String> arguments) async {
   await configureDesktopWindow();
   String? launchFile;
   for (final argument in arguments) {
-    if (argument.toLowerCase().endsWith('.msp')) {
+    if (argument.toLowerCase().endsWith('.moesp')) {
       launchFile = argument;
       break;
     }

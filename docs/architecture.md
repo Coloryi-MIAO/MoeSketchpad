@@ -48,7 +48,7 @@ COPYING / NOTICE / SOURCE-AVAILABILITY.txt
 `lib/` 与 `msp` 共用 core，不存在两份几何算法。UI 不直接实现求交、测量或
 序列化。
 
-## 2. .msp v2 格式规范（草案，已实现）
+## 2. .moesp v2 格式规范（草案，已实现）
 
 多层防护：**头部是 AES-GCM AAD；所有几何明文都在密文内**。多字节整数大端。
 
@@ -84,8 +84,8 @@ COPYING / NOTICE / SOURCE-AVAILABILITY.txt
   密钥包装未实现**，不会硬编码密钥。Web 无可靠设备密钥，只支持密码。
 - 错误处理：错误密码与 GCM 失败使用同一通用信息；不输出密钥或明文片段。
   魔数、版本、KDF、长度在 KDF/分配前校验。写入 CLI 使用临时文件+备份替换。
-- MIME：`application/x-moesketchpad`；扩展名 `.msp`；macOS UTI
-  `com.coloryi.moesketchpad.msp`。
+- MIME：`application/x-moesketchpad`；扩展名 `.moesp`；macOS UTI
+  `com.coloryi.moesketchpad.moesp`。
 
 限制：当前 schema 迁移只接受 v1 载荷到 v2 解析；二进制 v1（旧 `MSP1`）未保留
 兼容解码器。发布前需要正式规范冻结与 fuzz 测试。
@@ -96,17 +96,17 @@ COPYING / NOTICE / SOURCE-AVAILABILITY.txt
 
 ```text
 msp help [command] [--lang zh|en] [--json]
-msp create <primitive> [options] [--file doc.msp]
-msp constraint <type> <target...> [--value=n] [--file doc.msp]
+msp create <primitive> [options] [--file doc.moesp]
+msp constraint <type> <target...> [--value=n] [--file doc.moesp]
 msp label <target> --text=A [--auto] [--offset=x,y] [...]
 msp measure <target> --type=length|arcLength|angle|area|slope [--unit=...]
 msp animate <point> --path=<obj> --t=0..1 --speed=1 --loop|--pingpong --trail=n
 msp calc <expression> [--var=x=1]...
 msp view [--zoom=] [--pan-x=] [--page=] [--landscape] [...]
-msp validate <file.msp> [--deep]
-msp inspect <file.msp> [--header] [--full]
+msp validate <file.moesp> [--deep]
+msp inspect <file.moesp> [--header] [--full]
 msp convert <input> --to=json|msp --output=<path> [--force]
-msp export <file.msp> --format=svg|json --output=<path>
+msp export <file.moesp> --format=svg|json --output=<path>
 msp mcp-serve [--workspace=<dir>] [--audit-log=<file>]
 ```
 
@@ -142,7 +142,7 @@ msp create --triangle-90-3*4*5-5/180
 stderr。约束命令在求解未收敛时返回 5，且不写文件。
 
 安全：MCP 文件工具路径 canonicalize（含符号链接）后必须位于 `--workspace`；
-只读、只接受 `.msp`、大小限制；审计日志仅记录时间/工具/成功，不含文档或密码。
+只读、只接受 `.moesp`、大小限制；审计日志仅记录时间/工具/成功，不含文档或密码。
 AI 面向的 CLI 不执行任意 shell，工具参数按白名单结构化校验。
 
 未实现：`tangent` 约束会明确报错；GIF/APNG/MP4 导出没有已验证编码器，命令
@@ -215,7 +215,7 @@ MaterialApp(locale, theme)
 - 画布没有页面尺寸、纸张背景或页面边界。旧版文档中的 page 元数据保留用于兼容，
   不影响工作区显示与几何范围。
 - “几何设定”泊坞窗默认展开且位于右侧属性窗顶部；调整设定会更新文档 view 并
-  标记未保存，`.msp` 重开时恢复。切换标签页会保存当前 view 并加载目标文档 view。
+  标记未保存，`.moesp` 重开时恢复。切换标签页会保存当前 view 并加载目标文档 view。
 - CDT 工具箱：未实现的 CDR 工具仍可选择，但点击画布会显示“未接入、不会伪造
   成功”的提示；长按/右键工具组打开飞出菜单。
 - BLoC 所有权：DocumentBloc 是文档与 `isDirty` 唯一来源；CanvasBloc 管视口；
@@ -266,7 +266,7 @@ MaterialApp(locale, theme)
 - 几何变化后测量应由内核重新计算，不得把旧值写成静态文本。
 
 【文件操作】
-- 只能通过 MspCodec 或白名单 msp 文件工具读取、验证或写入 .msp 文档。
+- 只能通过 MspCodec 或白名单 msp 文件工具读取、验证或写入 .moesp 文档。
 - 不得构造路径并绕过工作区根目录限制；不得把密码写入对话、日志或元数据。
 - 加密文档的打开/保存需要用户显式提供密码；不得尝试破解、猜测或缓存密码。
 
@@ -318,7 +318,7 @@ COPYING/NOTICE 全文入口。
   下载，打开使用文件选择器。
 - Windows：`flutter build windows --release`；`windows/runner/resources/app_icon.ico`
   已替换；Inno Setup 脚本 `packaging/windows/moesketchpad.iss` 注册
-  `.msp`、MIME、DefaultIcon、打开命令；`register_msp.ps1` 供开发用。
+  `.moesp`、MIME、DefaultIcon、打开命令；`register_moesp.ps1` 供开发用。
 - macOS：`macos/Runner/Info.plist` 已声明 UTI 与 Document Type；AppIcon 资产
   已替换。Windows 上无法构建/验证 macOS，需 macOS runner + Xcode。
 - CI：`.github/workflows/build.yml` 使用 Flutter 3.47.6 矩阵构建 Web/Windows/
