@@ -337,6 +337,44 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiPrompt => '输入几何需求，或粘贴 AI 返回的 JSON 提案。';
 
   @override
+  String get aiConnectionHelp =>
+      'OpenAI 兼容 Chat Completions 接口。仅发送你输入的提示词与应用系统提示词，不发送画布文档；Web 端点需允许 CORS。';
+
+  @override
+  String get aiEndpoint => 'API 地址';
+
+  @override
+  String get aiModel => '模型名称';
+
+  @override
+  String get aiApiKey => 'API Key';
+
+  @override
+  String get aiApiKeyHint => '粘贴服务商提供的 API Key';
+
+  @override
+  String get aiApiKeySavedHint => '已保存；留空则继续使用已保存的 Key';
+
+  @override
+  String get aiKeyStorageNotice =>
+      '桌面端使用系统安全存储；Web 端加密保存在当前浏览器。Key 不写入文档或日志，请仅使用可信端点/设备。';
+
+  @override
+  String get aiClearApiKey => '清除已保存的 Key';
+
+  @override
+  String get aiSaveSettings => '保存配置';
+
+  @override
+  String get aiSettingsSaved => 'AI 配置已安全保存。';
+
+  @override
+  String get aiShowKey => '显示 API Key';
+
+  @override
+  String get aiHideKey => '隐藏 API Key';
+
+  @override
   String get aiSend => '生成预览';
 
   @override
@@ -353,7 +391,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String aiInvaldProposal(Object error) {
-    return '提案格式无效：$error';
+    return 'AI 请求失败或提案无效：$error';
   }
 
   @override

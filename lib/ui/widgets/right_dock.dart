@@ -36,12 +36,34 @@ class RightDock extends StatefulWidget {
 
 class _RightDockState extends State<RightDock> {
   final TextEditingController _aiInput = TextEditingController();
+  final TextEditingController _aiEndpoint = TextEditingController(
+    text: 'https://api.openai.com/v1',
+  );
+  final TextEditingController _aiModel = TextEditingController();
+  final TextEditingController _aiApiKey = TextEditingController();
+  bool _aiConfigEdited = false;
+  bool _aiControllersInitialized = false;
+  bool _showAiApiKey = false;
   MeasurementType _measureType = MeasurementType.length;
 
   @override
   void dispose() {
     _aiInput.dispose();
+    _aiEndpoint.dispose();
+    _aiModel.dispose();
+    _aiApiKey.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ai = context.read<AiBloc>().state;
+    if (!_aiControllersInitialized && ai.settingsLoaded) {
+      _aiEndpoint.text = ai.endpoint;
+      _aiModel.text = ai.model;
+      _aiControllersInitialized = true;
+    }
   }
 
   void _updateCanvasSetting(void Function(CanvasBloc bloc) update) {
@@ -724,171 +746,318 @@ class _RightDockState extends State<RightDock> {
   }
 
   Widget _aiSection(AppLocalizations l10n) {
-    return _DockSection(
-      title: l10n.aiAssistant,
-      icon: Icons.auto_awesome,
-      cute: widget.cute,
-      initiallyExpanded: true,
-      child: BlocBuilder<AiBloc, AiState>(
-        builder: (context, state) {
-          final preview = state.preview;
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(10, 3, 10, 9),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  l10n.aiNoModel,
-                  style: const TextStyle(
-                    fontSize: 10.5,
-                    color: Color(0xff6d7d8d),
+    return BlocListener<AiBloc, AiState>(
+      listenWhen: (previous, current) =>
+          !previous.settingsLoaded && current.settingsLoaded,
+      listener: (context, state) {
+        if (_aiConfigEdited) return;
+        _aiEndpoint.text = state.endpoint;
+        _aiModel.text = state.model;
+        _aiControllersInitialized = true;
+      },
+      child: _DockSection(
+        title: l10n.aiAssistant,
+        icon: Icons.auto_awesome,
+        cute: widget.cute,
+        initiallyExpanded: true,
+        child: BlocBuilder<AiBloc, AiState>(
+          builder: (context, state) {
+            final preview = state.preview;
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(10, 3, 10, 9),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    l10n.aiConnectionHelp,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      color: Color(0xff6d7d8d),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _aiInput,
-                  minLines: 3,
-                  maxLines: 6,
-                  style: const TextStyle(fontSize: 11),
-                  decoration: InputDecoration(
-                    hintText: l10n.aiPrompt,
-                    hintStyle: const TextStyle(fontSize: 10.5),
-                    isDense: true,
-                    border: const OutlineInputBorder(),
+                  const SizedBox(height: 6),
+                  TextField(
+                    key: const ValueKey('ai-endpoint'),
+                    controller: _aiEndpoint,
+                    keyboardType: TextInputType.url,
+                    onChanged: (_) => _aiConfigEdited = true,
+                    style: const TextStyle(fontSize: 11),
+                    decoration: InputDecoration(
+                      labelText: l10n.aiEndpoint,
+                      hintText: 'https://api.openai.com/v1',
+                      isDense: true,
+                      border: const OutlineInputBorder(),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    FilledButton(
-                      onPressed: () {
-                        context.read<AiBloc>()
-                          ..setInput(_aiInput.text)
-                          ..preview(
-                            _aiInput.text,
-                            context.read<DocumentBloc>().state.active.document,
-                          );
-                      },
-                      style: FilledButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      child: Text(
-                        l10n.aiSend,
-                        style: const TextStyle(fontSize: 11),
+                  const SizedBox(height: 6),
+                  TextField(
+                    key: const ValueKey('ai-model'),
+                    controller: _aiModel,
+                    onChanged: (_) => _aiConfigEdited = true,
+                    style: const TextStyle(fontSize: 11),
+                    decoration: InputDecoration(
+                      labelText: l10n.aiModel,
+                      hintText: 'gpt-4o-mini',
+                      isDense: true,
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    key: const ValueKey('ai-api-key'),
+                    controller: _aiApiKey,
+                    obscureText: !_showAiApiKey,
+                    onChanged: (_) => _aiConfigEdited = true,
+                    style: const TextStyle(fontSize: 11),
+                    decoration: InputDecoration(
+                      labelText: l10n.aiApiKey,
+                      hintText: state.apiKeyConfigured
+                          ? l10n.aiApiKeySavedHint
+                          : l10n.aiApiKeyHint,
+                      isDense: true,
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        tooltip: _showAiApiKey
+                            ? l10n.aiHideKey
+                            : l10n.aiShowKey,
+                        onPressed: () =>
+                            setState(() => _showAiApiKey = !_showAiApiKey),
+                        icon: Icon(
+                          _showAiApiKey
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          size: 17,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    IconButton(
-                      tooltip: l10n.copyPrompt,
-                      onPressed: () async {
-                        await Clipboard.setData(
-                          ClipboardData(
-                            text: context.read<AiBloc>().systemPrompt(
-                              l10n.localeName,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    l10n.aiKeyStorageNotice,
+                    style: const TextStyle(
+                      fontSize: 9.5,
+                      color: Color(0xff6d7d8d),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed:
+                          state.settingsLoaded &&
+                              state.apiKeyConfigured &&
+                              !state.busy
+                          ? () async {
+                              final bloc = context.read<AiBloc>();
+                              final saved = await bloc.saveSettings(
+                                endpoint: _aiEndpoint.text,
+                                model: _aiModel.text,
+                                clearApiKey: true,
+                              );
+                              if (saved && context.mounted) {
+                                _aiApiKey.clear();
+                                _aiConfigEdited = true;
+                              }
+                            }
+                          : null,
+                      icon: const Icon(Icons.key_off_outlined, size: 15),
+                      label: Text(
+                        l10n.aiClearApiKey,
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    ),
+                  ),
+                  TextField(
+                    key: const ValueKey('ai-prompt'),
+                    controller: _aiInput,
+                    minLines: 3,
+                    maxLines: 6,
+                    onChanged: context.read<AiBloc>().setInput,
+                    style: const TextStyle(fontSize: 11),
+                    decoration: InputDecoration(
+                      hintText: l10n.aiPrompt,
+                      hintStyle: const TextStyle(fontSize: 10.5),
+                      isDense: true,
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      FilledButton(
+                        key: const ValueKey('ai-send'),
+                        onPressed: !state.settingsLoaded || state.busy
+                            ? null
+                            : () async {
+                                final bloc = context.read<AiBloc>();
+                                final saved = await bloc.saveSettings(
+                                  endpoint: _aiEndpoint.text,
+                                  model: _aiModel.text,
+                                  apiKey: _aiApiKey.text,
+                                );
+                                if (!saved || !context.mounted) return;
+                                _aiApiKey.clear();
+                                _aiConfigEdited = false;
+                                await bloc.sendPrompt(
+                                  _aiInput.text,
+                                  context
+                                      .read<DocumentBloc>()
+                                      .state
+                                      .active
+                                      .document,
+                                  language: l10n.localeName,
+                                );
+                              },
+                        style: FilledButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: Text(
+                          state.busy ? l10n.loading : l10n.aiSend,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      OutlinedButton(
+                        key: const ValueKey('ai-save-settings'),
+                        onPressed: !state.settingsLoaded || state.busy
+                            ? null
+                            : () async {
+                                final bloc = context.read<AiBloc>();
+                                final saved = await bloc.saveSettings(
+                                  endpoint: _aiEndpoint.text,
+                                  model: _aiModel.text,
+                                  apiKey: _aiApiKey.text,
+                                );
+                                if (!saved || !context.mounted) return;
+                                _aiApiKey.clear();
+                                _aiConfigEdited = false;
+                                ScaffoldMessenger.maybeOf(
+                                  context,
+                                )?.showSnackBar(
+                                  SnackBar(content: Text(l10n.aiSettingsSaved)),
+                                );
+                              },
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: Text(
+                          l10n.aiSaveSettings,
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        tooltip: l10n.copyPrompt,
+                        onPressed: () async {
+                          await Clipboard.setData(
+                            ClipboardData(
+                              text: context.read<AiBloc>().systemPrompt(
+                                l10n.localeName,
+                              ),
+                            ),
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                              SnackBar(content: Text(l10n.promptCopied)),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.copy_all_outlined, size: 16),
+                      ),
+                    ],
+                  ),
+                  if (state.error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 5),
+                      child: Text(
+                        l10n.aiInvaldProposal(state.error!),
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          color: Color(0xffb4433c),
+                        ),
+                      ),
+                    ),
+                  if (preview != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: widget.cute
+                            ? const Color(0xfff8eef3)
+                            : const Color(0xffeef4f9),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l10n.aiPreviewReady,
+                            style: const TextStyle(fontSize: 10.5),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            l10n.previewObjects(preview.addedObjects),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Color(0xff657687),
                             ),
                           ),
-                        );
-                        if (context.mounted) {
-                          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                            SnackBar(content: Text(l10n.promptCopied)),
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.copy_all_outlined, size: 16),
+                          const SizedBox(height: 5),
+                          Text(
+                            preview.summary,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Color(0xff5d6d7d),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Row(
+                            children: [
+                              FilledButton(
+                                onPressed: () {
+                                  widget.onApplyAi(preview.document);
+                                  context.read<AiBloc>().markApplied();
+                                },
+                                style: FilledButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                child: Text(
+                                  l10n.aiApply,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              TextButton(
+                                onPressed: () =>
+                                    context.read<AiBloc>().discard(),
+                                child: Text(
+                                  l10n.aiDiscard,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
-                ),
-                if (state.error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 5),
-                    child: Text(
-                      l10n.aiInvaldProposal(state.error!),
-                      style: const TextStyle(
-                        fontSize: 10.5,
-                        color: Color(0xffb4433c),
+                  if (state.applied)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 5),
+                      child: Text(
+                        l10n.aiApplied,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          color: Color(0xff4f7b52),
+                        ),
                       ),
                     ),
-                  ),
-                if (preview != null) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: widget.cute
-                          ? const Color(0xfff8eef3)
-                          : const Color(0xffeef4f9),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.aiPreviewReady,
-                          style: const TextStyle(fontSize: 10.5),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          l10n.previewObjects(preview.addedObjects),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Color(0xff657687),
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          preview.summary,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Color(0xff5d6d7d),
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Row(
-                          children: [
-                            FilledButton(
-                              onPressed: () {
-                                widget.onApplyAi(preview.document);
-                                context.read<AiBloc>().markApplied();
-                              },
-                              style: FilledButton.styleFrom(
-                                visualDensity: VisualDensity.compact,
-                              ),
-                              child: Text(
-                                l10n.aiApply,
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            TextButton(
-                              onPressed: () => context.read<AiBloc>().discard(),
-                              child: Text(
-                                l10n.aiDiscard,
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
-                if (state.applied)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 5),
-                    child: Text(
-                      l10n.aiApplied,
-                      style: const TextStyle(
-                        fontSize: 10.5,
-                        color: Color(0xff4f7b52),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        },
+              ),
+            );
+          },
+        ),
       ),
     );
   }

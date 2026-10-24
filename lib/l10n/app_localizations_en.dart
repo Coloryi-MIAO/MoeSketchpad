@@ -344,6 +344,45 @@ class AppLocalizationsEn extends AppLocalizations {
       'Describe geometry or paste a JSON proposal from the AI.';
 
   @override
+  String get aiConnectionHelp =>
+      'OpenAI-compatible Chat Completions API. Only your prompt and the app\'s system instructions are sent; no canvas document is sent. Web endpoints must allow CORS.';
+
+  @override
+  String get aiEndpoint => 'API endpoint';
+
+  @override
+  String get aiModel => 'Model name';
+
+  @override
+  String get aiApiKey => 'API key';
+
+  @override
+  String get aiApiKeyHint => 'Paste the API key from your provider';
+
+  @override
+  String get aiApiKeySavedHint =>
+      'Saved; leave blank to keep using the stored key';
+
+  @override
+  String get aiKeyStorageNotice =>
+      'Desktop uses platform secure storage; Web encrypts it in this browser. Keys never enter documents or logs. Use trusted endpoints/devices only.';
+
+  @override
+  String get aiClearApiKey => 'Clear saved key';
+
+  @override
+  String get aiSaveSettings => 'Save settings';
+
+  @override
+  String get aiSettingsSaved => 'AI settings saved securely.';
+
+  @override
+  String get aiShowKey => 'Show API key';
+
+  @override
+  String get aiHideKey => 'Hide API key';
+
+  @override
   String get aiSend => 'Preview';
 
   @override
@@ -362,7 +401,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String aiInvaldProposal(Object error) {
-    return 'Invalid proposal: $error';
+    return 'AI request failed or proposal is invalid: $error';
   }
 
   @override

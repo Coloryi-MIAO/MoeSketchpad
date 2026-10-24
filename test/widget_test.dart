@@ -52,6 +52,9 @@ void main() {
     expect(find.text('几何设定'), findsOneWidget);
     expect(find.text('基础网格间距'), findsOneWidget);
     expect(find.text('数值容差'), findsOneWidget);
+    expect(find.byKey(const ValueKey('ai-endpoint')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ai-model')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ai-api-key')), findsOneWidget);
     expect(tester.getRect(find.text('文件(F)').first).top, lessThan(40));
     expect(tester.getRect(find.text('点').first).left, lessThan(400));
     expect(tester.getRect(find.text('几何设定')).right, greaterThan(1440 - 310));

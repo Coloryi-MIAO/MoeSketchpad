@@ -275,9 +275,19 @@ MaterialApp(locale, theme)
 - 如果请求无法由现有工具表达，说明缺少哪个能力并给出可行的替代构造。
 ```
 
-当前 AI 面板**不内置网络模型**，只接受结构化 JSON 提案并提供预览/应用；
-MCP stdio 服务可被外部 AI 客户端经白名单工具调用。设备端模型/远程模型连接与
-配置属于后续里程碑，不会伪造“已连接”。
+AI 面板支持配置 OpenAI 兼容的 Chat Completions API 地址、模型名和 API Key。
+地址/模型使用 shared preferences 保存；API Key 使用 `flutter_secure_storage`
+保存，不进入 BLoC state、文档、审计或日志。每次请求只发送用户输入与系统提示词，
+请求超时 60 秒，提示词/请求体/响应体均有大小上限；拒绝非本机 HTTP、带 userinfo、
+query 或 fragment 的地址，并禁用 HTTP 重定向，避免凭据跟随跳转泄露。
+响应只接受 JSON 几何提案，先经几何模型验证并显示预览，用户确认后才写入文档。
+当前 API 是 OpenAI-compatible Chat Completions；MCP stdio 仍由 CLI 单独提供，
+没有把远程模型伪装成 MCP tool client。
+
+桌面 API Key 由系统凭据存储保护；Web 端由 `flutter_secure_storage` 的 Web 实现加密
+存于当前浏览器，仅应在可信设备/来源使用。Web 服务端点必须支持 CORS（含 Authorization
+和 JSON 请求头）；不支持 CORS 的供应商需通过自建可信 HTTPS 代理接入。浏览器中的
+密钥无法达到服务器端保管等级，勿在共享设备保存。
 
 ## 9. 关闭拦截、多语言、字体与主题
 
@@ -347,9 +357,10 @@ COPYING/NOTICE 全文入口。
 2. Canvas：10 万对象、增量索引、笔迹/矩形/椭圆/文本工具、交点吸附。
 3. 文档：自动保存/崩溃恢复、系统字体枚举（原生）、设备钥匙串、多窗口/最近文件。
 4. 导出：完整 SVG、PNG/PDF、GIF/APNG/MP4（需要验证编码器）。
-5. AI/MCP：远程模型适配、工具 schema 版本化、审计轮转、端到端预览测试。
+5. AI/MCP：更多供应商协议适配、工具 schema 版本化、审计轮转、MCP 客户端传输。
 6. 发布：签名/公证、安装器 CI、完整 NOTICE 生成、macOS UTI 实机验证。
 
 平台限制（明确）：Web 无本地字体枚举、任意路径文件系统、进程调用、设备密钥；
 桌面设备密钥与系统字体枚举未实现；MP4/GIF 未实现；设备文件关联的 macOS 侧
-未在 Windows 上验证；当前 AI 无内置模型；不声称 60fps/全工具支持。
+当前 AI 直接请求依赖端点兼容 Chat Completions；Web 受 CORS/浏览器安全存储限制；
+不声称 60fps/全部原始需求功能均已实现。

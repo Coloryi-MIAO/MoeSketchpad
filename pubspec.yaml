@@ -14,12 +14,15 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  flutter_secure_storage: ^9.2.4
   flutter_bloc: ^9.1.1
+  http: ^1.5.0
   intl: ^0.20.3
   file_selector: ^1.1.0
   window_manager: ^0.5.2
   web: ^1.1.2
   path: ^1.9.0
+  shared_preferences: ^2.5.3
   moesketchpad_core:
     path: packages/moesketchpad_core
   moesketchpad_cli:

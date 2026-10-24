@@ -722,6 +722,78 @@ abstract class AppLocalizations {
   /// **'输入几何需求，或粘贴 AI 返回的 JSON 提案。'**
   String get aiPrompt;
 
+  /// No description provided for @aiConnectionHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'OpenAI 兼容 Chat Completions 接口。仅发送你输入的提示词与应用系统提示词，不发送画布文档；Web 端点需允许 CORS。'**
+  String get aiConnectionHelp;
+
+  /// No description provided for @aiEndpoint.
+  ///
+  /// In zh, this message translates to:
+  /// **'API 地址'**
+  String get aiEndpoint;
+
+  /// No description provided for @aiModel.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型名称'**
+  String get aiModel;
+
+  /// No description provided for @aiApiKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'API Key'**
+  String get aiApiKey;
+
+  /// No description provided for @aiApiKeyHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'粘贴服务商提供的 API Key'**
+  String get aiApiKeyHint;
+
+  /// No description provided for @aiApiKeySavedHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存；留空则继续使用已保存的 Key'**
+  String get aiApiKeySavedHint;
+
+  /// No description provided for @aiKeyStorageNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'桌面端使用系统安全存储；Web 端加密保存在当前浏览器。Key 不写入文档或日志，请仅使用可信端点/设备。'**
+  String get aiKeyStorageNotice;
+
+  /// No description provided for @aiClearApiKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'清除已保存的 Key'**
+  String get aiClearApiKey;
+
+  /// No description provided for @aiSaveSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存配置'**
+  String get aiSaveSettings;
+
+  /// No description provided for @aiSettingsSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 配置已安全保存。'**
+  String get aiSettingsSaved;
+
+  /// No description provided for @aiShowKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示 API Key'**
+  String get aiShowKey;
+
+  /// No description provided for @aiHideKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'隐藏 API Key'**
+  String get aiHideKey;
+
   /// No description provided for @aiSend.
   ///
   /// In zh, this message translates to:
@@ -755,7 +827,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiInvaldProposal.
   ///
   /// In zh, this message translates to:
-  /// **'提案格式无效：{error}'**
+  /// **'AI 请求失败或提案无效：{error}'**
   String aiInvaldProposal(Object error);
 
   /// No description provided for @aiApplied.

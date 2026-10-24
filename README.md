@@ -22,8 +22,8 @@
 - `msp` CLI：create/constraint/label/measure/animate/calc/view/validate/
   inspect/convert/export/mcp-serve，统一退出码与 JSON 输出。
 - 三角简写与规范形式等价：`--triangle-90-3*4*5-5/180`。
-- MCP stdio 白名单工具与 workspace 路径限制；AI JSON 提案预览/应用；
-  AI 面板不内置网络模型。
+- MCP stdio 白名单工具与 workspace 路径限制；AI 支持可配置 OpenAI 兼容
+  Chat Completions 地址、模型和 API Key，返回内容经 JSON 校验后预览，必须由用户确认应用。
 - 中英文 ARB、萌化/专业主题、密码打开保存、关于界面、COPYING/NOTICE/CI
   与 Windows/macOS/Web 平台配置。
 
@@ -31,10 +31,11 @@
 
 - 设备钥匙串/设备密钥（仅密码）；自动保存与崩溃恢复；系统字体枚举。
 - GIF/APNG/MP4 导出；持久化“最近文件”。
-- 相切约束、交点吸附、部分 CDR 工具（矩形/椭圆/手绘/文本/填充等按钮存在但
-  会明确提示未接入）；系统字体枚举在 Web 不可用。
+- 相切约束、交点吸附、完整 SVG 页面裁剪之外的无界画布导出等仍需完善；
+  系统字体枚举在 Web 不可用。
 - 10 万对象 60fps 尚无基准；macOS 打包需在 macOS + Xcode 验证。
-- 内置 AI 无模型连接；通过 MCP/JSON 提案协作。
+- AI 连接支持 OpenAI 兼容的 Chat Completions API；浏览器端点需允许 CORS。
+  桌面端 API Key 使用系统安全存储，Web 端使用浏览器加密存储；不要在共享/不可信设备保存密钥。
 
 ## 运行
 
