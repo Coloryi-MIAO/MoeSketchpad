@@ -1,23 +1,27 @@
 {
     "name": "萌板 / MoeSketchpad",
     "short_name": "萌板",
+    "id": "/?source=pwa",
     "start_url": ".",
+    "scope": ".",
     "display": "standalone",
-    "background_color": "#dfe3e8",
-    "theme_color": "#3978b7",
-    "description": "Cross-platform dynamic geometry sketchpad.",
-    "orientation": "landscape",
+    "background_color": "#eef1f6",
+    "theme_color": "#9d4f70",
+    "description": "跨平台动态几何画板，支持平面几何、函数、圆锥曲线、动点动画与加密 .msp 文档。",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {
             "src": "icons/Icon-192.png",
             "sizes": "192x192",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "src": "icons/Icon-512.png",
             "sizes": "512x512",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "src": "icons/Icon-maskable-192.png",
