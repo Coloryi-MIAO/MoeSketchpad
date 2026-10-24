@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:moesketchpad/app.dart';
 import 'package:moesketchpad/bloc/canvas_bloc.dart';
 import 'package:moesketchpad/bloc/document_bloc.dart';
+import 'package:moesketchpad/bloc/tool_bloc.dart';
 
 void main() {
   testWidgets('workspace shows the CDR shell and creates a point', (
@@ -22,6 +23,32 @@ void main() {
     expect(find.text('画布 · 几何设定'), findsOneWidget);
     expect(find.text('选择'), findsWidgets);
     expect(find.byKey(const ValueKey('canvas-quick-toolbar')), findsNothing);
+    for (final tool in MoeTool.values) {
+      expect(
+        find.byKey(ValueKey('top-tool-${tool.name}')).hitTestable(),
+        findsOneWidget,
+        reason: '${tool.name} should be visible without horizontal scrolling',
+      );
+    }
+    for (final label in [
+      '文件(F)',
+      '编辑(E)',
+      '视图(V)',
+      '布局(L)',
+      '对象(O)',
+      '效果(C)',
+      '文本(T)',
+      '表格(A)',
+      '工具(O)',
+      '窗口(W)',
+      '帮助(H)',
+    ]) {
+      expect(
+        find.byKey(ValueKey('menu-$label')).hitTestable(),
+        findsOneWidget,
+        reason: '$label should be visible in the compact menu',
+      );
+    }
     expect(find.text('几何设定'), findsOneWidget);
     expect(find.text('基础网格间距'), findsOneWidget);
     expect(find.text('数值容差'), findsOneWidget);
@@ -86,6 +113,50 @@ void main() {
     expect(find.text('选择'), findsWidgets);
     expect(find.text('几何设定'), findsOneWidget);
     expect(find.byKey(const ValueKey('canvas-quick-toolbar')), findsNothing);
+    for (final action in [
+      'toolbar-new',
+      'toolbar-open',
+      'toolbar-save',
+      'toolbar-undo',
+      'toolbar-redo',
+      'toolbar-zoom',
+      'toolbar-unit',
+      'toolbar-grid',
+      'toolbar-snap-grid',
+      'toolbar-snap-objects',
+    ]) {
+      expect(
+        find.byKey(ValueKey(action)).hitTestable(),
+        findsOneWidget,
+        reason: '$action should be visible in the compact operations bar',
+      );
+    }
+    for (final tool in MoeTool.values) {
+      expect(
+        find.byKey(ValueKey('top-tool-${tool.name}')).hitTestable(),
+        findsOneWidget,
+        reason: '${tool.name} should be visible without horizontal scrolling',
+      );
+    }
+    for (final label in [
+      '文件(F)',
+      '编辑(E)',
+      '视图(V)',
+      '布局(L)',
+      '对象(O)',
+      '效果(C)',
+      '文本(T)',
+      '表格(A)',
+      '工具(O)',
+      '窗口(W)',
+      '帮助(H)',
+    ]) {
+      expect(
+        find.byKey(ValueKey('menu-$label')).hitTestable(),
+        findsOneWidget,
+        reason: '$label should be visible in the compact menu',
+      );
+    }
     expect(
       tester.getRect(find.text('文件(F)').first).top,
       greaterThanOrEqualTo(0),

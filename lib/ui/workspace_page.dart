@@ -595,10 +595,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 const SizedBox(height: 6),
                 Text(
                   l10n.fontCuratedNotice,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Color(0xff778696),
-                  ),
+                  style: TextStyle(fontSize: 10, color: Color(0xff778696)),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
@@ -743,6 +740,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
   }
 
   Widget _menuBar(AppLocalizations l10n) {
+    final width = MediaQuery.sizeOf(context).width;
     final menus = <Widget>[
       _topMenu(l10n.menuFile, [
         _menuItem('new', l10n.newDocument, Icons.note_add_outlined),
@@ -751,47 +749,46 @@ class _WorkspacePageState extends State<WorkspacePage> {
         _menuItem('saveAs', l10n.saveAs, Icons.save_as_outlined),
         _menuItem('exportPage', l10n.exportPage, Icons.ios_share),
         _menuItem('closeTab', l10n.closeTab, Icons.close),
-      ]),
+      ], compact: width < 860),
       _topMenu(l10n.menuEdit, [
         _menuItem('undo', l10n.undo, Icons.undo),
         _menuItem('redo', l10n.redo, Icons.redo),
         _menuItem('delete', l10n.deleteSelection, Icons.delete_outline),
-      ]),
+      ], compact: width < 860),
       _topMenu(l10n.menuView, [
         _menuItem('toggleGrid', l10n.grid, Icons.grid_4x4),
         _menuItem('snapGrid', l10n.snapGrid, Icons.grid_on),
         _menuItem('snapObjects', l10n.snapObjects, Icons.hub_outlined),
         _menuItem('fitView', l10n.fitView, Icons.fit_screen),
         _menuItem('resetOrigin', l10n.resetOrigin, Icons.my_location),
-      ]),
+      ], compact: width < 860),
       _topMenu(l10n.menuLayout, [
         _menuItem('toggleDock', l10n.properties, Icons.view_sidebar_outlined),
-      ]),
+      ], compact: width < 860),
       _topMenu(l10n.menuObject, [
         _menuItem('delete', l10n.deleteSelection, Icons.delete_outline),
         _menuItem('label', l10n.toolText, Icons.text_fields),
-      ]),
+      ], compact: width < 860),
       _topMenu(l10n.menuEffects, [
         _menuItem('measure', l10n.addMeasure, Icons.straighten),
         _menuItem('animate', l10n.addAnimation, Icons.play_circle_outline),
-      ]),
+      ], compact: width < 860),
       _topMenu(l10n.menuText, [
         _menuItem('label', l10n.toolText, Icons.text_fields),
-      ]),
+      ], compact: width < 860),
       _topMenu(l10n.menuTable, [
         _menuItem('insertTable', l10n.menuTable, Icons.table_chart_outlined),
-      ]),
+      ], compact: width < 860),
       _topMenu(l10n.menuTools, [
         _menuItem('settings', l10n.settings, Icons.settings_outlined),
-      ]),
+      ], compact: width < 860),
       _topMenu(l10n.menuWindow, [
         _menuItem('toggleDock', l10n.properties, Icons.view_sidebar_outlined),
-      ]),
+      ], compact: width < 860),
       _topMenu(l10n.menuHelp, [
         _menuItem('about', l10n.about, Icons.info_outline),
-      ]),
+      ], compact: width < 860),
     ];
-    final width = MediaQuery.sizeOf(context).width;
     return Container(
       height: 44,
       decoration: BoxDecoration(
@@ -858,15 +855,23 @@ class _WorkspacePageState extends State<WorkspacePage> {
         ),
       );
 
-  Widget _topMenu(String label, List<PopupMenuItem<String>> items) {
+  Widget _topMenu(
+    String label,
+    List<PopupMenuItem<String>> items, {
+    bool compact = false,
+  }) {
     return PopupMenuButton<String>(
+      key: ValueKey('menu-$label'),
       tooltip: '',
       position: PopupMenuPosition.under,
       onSelected: _onMenuAction,
       itemBuilder: (context) => items,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        margin: EdgeInsets.symmetric(horizontal: compact ? 1 : 2, vertical: 2),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 3 : 9,
+          vertical: compact ? 7 : 6,
+        ),
         decoration: BoxDecoration(
           color: const Color(0xfffdfefe),
           border: Border.all(color: const Color(0xff8293a3), width: 1.2),
@@ -874,8 +879,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
         ),
         child: Text(
           label,
-          style: const TextStyle(
-            fontSize: 12.5,
+          style: TextStyle(
+            fontSize: compact ? 10.5 : 12.5,
             color: Color(0xff172b3d),
             fontWeight: FontWeight.w700,
           ),
@@ -898,192 +903,203 @@ class _WorkspacePageState extends State<WorkspacePage> {
         children: [
           Expanded(
             child: LayoutBuilder(
-              builder: (context, constraints) => SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _barButton(
-                      Icons.note_add_outlined,
-                      l10n.newDocument,
-                      _newTab,
-                      showLabel: true,
-                    ),
-                    _barButton(
-                      Icons.folder_open_outlined,
-                      l10n.open,
-                      _openFile,
-                      showLabel: true,
-                    ),
-                    _barButton(
-                      Icons.save_outlined,
-                      l10n.save,
-                      () => _saveActive(),
-                      showLabel: true,
-                    ),
-                    const _BarDivider(),
-                    _barButton(
-                      Icons.undo,
-                      l10n.undo,
-                      documentState.canUndo
-                          ? () => context.read<DocumentBloc>().undo()
-                          : null,
-                      showLabel: true,
-                    ),
-                    _barButton(
-                      Icons.redo,
-                      l10n.redo,
-                      documentState.canRedo
-                          ? () => context.read<DocumentBloc>().redo()
-                          : null,
-                      showLabel: true,
-                    ),
-                    const _BarDivider(),
-                    BlocBuilder<CanvasBloc, CanvasState>(
-                      builder: (context, canvas) {
-                        final percent = (canvas.zoom * 100).round();
-                        return PopupMenuButton<String>(
-                          tooltip: l10n.zoom,
-                          onSelected: (value) {
-                            if (value == 'fit') {
-                              context.read<CanvasBloc>().fitBounds(
-                                context
-                                    .read<DocumentBloc>()
-                                    .state
-                                    .active
-                                    .document
-                                    .contentBounds,
-                              );
-                            } else {
-                              context.read<CanvasBloc>().setZoom(
-                                double.parse(value) / 100,
-                              );
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            for (final value in [
-                              25,
-                              50,
-                              75,
-                              100,
-                              150,
-                              200,
-                              400,
-                              800,
-                            ])
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 860;
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _barButton(
+                        Icons.note_add_outlined,
+                        l10n.newDocument,
+                        _newTab,
+                        key: const ValueKey('toolbar-new'),
+                        showLabel: !compact,
+                      ),
+                      _barButton(
+                        Icons.folder_open_outlined,
+                        l10n.open,
+                        _openFile,
+                        key: const ValueKey('toolbar-open'),
+                        showLabel: !compact,
+                      ),
+                      _barButton(
+                        Icons.save_outlined,
+                        l10n.save,
+                        () => _saveActive(),
+                        key: const ValueKey('toolbar-save'),
+                        showLabel: !compact,
+                      ),
+                      const _BarDivider(),
+                      _barButton(
+                        Icons.undo,
+                        l10n.undo,
+                        documentState.canUndo
+                            ? () => context.read<DocumentBloc>().undo()
+                            : null,
+                        key: const ValueKey('toolbar-undo'),
+                        showLabel: !compact,
+                      ),
+                      _barButton(
+                        Icons.redo,
+                        l10n.redo,
+                        documentState.canRedo
+                            ? () => context.read<DocumentBloc>().redo()
+                            : null,
+                        key: const ValueKey('toolbar-redo'),
+                        showLabel: !compact,
+                      ),
+                      const _BarDivider(),
+                      BlocBuilder<CanvasBloc, CanvasState>(
+                        builder: (context, canvas) {
+                          final percent = (canvas.zoom * 100).round();
+                          return PopupMenuButton<String>(
+                            key: const ValueKey('toolbar-zoom'),
+                            tooltip: l10n.zoom,
+                            onSelected: (value) {
+                              if (value == 'fit') {
+                                context.read<CanvasBloc>().fitBounds(
+                                  context
+                                      .read<DocumentBloc>()
+                                      .state
+                                      .active
+                                      .document
+                                      .contentBounds,
+                                );
+                              } else {
+                                context.read<CanvasBloc>().setZoom(
+                                  double.parse(value) / 100,
+                                );
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              for (final value in [
+                                25,
+                                50,
+                                75,
+                                100,
+                                150,
+                                200,
+                                400,
+                                800,
+                              ])
+                                PopupMenuItem(
+                                  value: '$value',
+                                  height: 32,
+                                  child: Text(
+                                    '$value%',
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                ),
                               PopupMenuItem(
-                                value: '$value',
+                                value: 'fit',
                                 height: 32,
                                 child: Text(
-                                  '$value%',
+                                  l10n.fitView,
                                   style: const TextStyle(fontSize: 11),
                                 ),
                               ),
-                            PopupMenuItem(
-                              value: 'fit',
-                              height: 32,
-                              child: Text(
-                                l10n.fitView,
-                                style: const TextStyle(fontSize: 11),
+                            ],
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
                               ),
-                            ),
-                          ],
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xfffdfefe),
-                              border: Border.all(
-                                color: const Color(0xff899aaa),
-                                width: 1.1,
-                              ),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                            child: Row(
-                              children: [
-                                Text(
-                                  '$percent%',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xff203548),
-                                  ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xfffdfefe),
+                                border: Border.all(
+                                  color: const Color(0xff899aaa),
+                                  width: 1.1,
                                 ),
-                                const Icon(Icons.arrow_drop_down, size: 17),
-                              ],
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    '$percent%',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xff203548),
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_drop_down, size: 17),
+                                ],
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 6),
-                    BlocBuilder<CanvasBloc, CanvasState>(
-                      builder: (context, canvas) => DropdownButton<String>(
-                        value: const ['mm', 'cm', 'px'].contains(canvas.unit)
-                            ? canvas.unit
-                            : 'mm',
-                        isDense: true,
-                        underline: const SizedBox.shrink(),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xff203548),
-                          fontWeight: FontWeight.w700,
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'mm', child: Text('mm')),
-                          DropdownMenuItem(value: 'cm', child: Text('cm')),
-                          DropdownMenuItem(value: 'px', child: Text('px')),
-                        ],
-                        onChanged: (value) {
-                          if (value == null) return;
-                          _updateCanvasSetting(
-                            (canvas) => canvas.setUnit(value),
                           );
                         },
                       ),
-                    ),
-                    const _BarDivider(),
-                    BlocBuilder<CanvasBloc, CanvasState>(
-                      builder: (context, canvas) => Row(
-                        children: [
-                          _barButton(
-                            canvas.showGrid ? Icons.grid_on : Icons.grid_off,
-                            l10n.grid,
-                            () => _updateCanvasSetting(
-                              (bloc) => bloc.toggleGrid(),
-                            ),
-                            active: canvas.showGrid,
-                            showLabel: true,
+                      const SizedBox(width: 6),
+                      BlocBuilder<CanvasBloc, CanvasState>(
+                        builder: (context, canvas) => DropdownButton<String>(
+                          key: const ValueKey('toolbar-unit'),
+                          value: const ['mm', 'cm', 'px'].contains(canvas.unit)
+                              ? canvas.unit
+                              : 'mm',
+                          isDense: true,
+                          underline: const SizedBox.shrink(),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xff203548),
+                            fontWeight: FontWeight.w700,
                           ),
-                          _barButton(
-                            Icons.grid_4x4,
-                            l10n.snapGrid,
-                            () => _updateCanvasSetting(
-                              (bloc) => bloc.setSnapGrid(!canvas.snapGrid),
-                            ),
-                            key: const ValueKey('toolbar-snap-grid'),
-                            active: canvas.snapGrid,
-                            showLabel: true,
-                          ),
-                          _barButton(
-                            Icons.hub_outlined,
-                            l10n.snapObjects,
-                            () => _updateCanvasSetting(
-                              (bloc) =>
-                                  bloc.setSnapObjects(!canvas.snapObjects),
-                            ),
-                            key: const ValueKey('toolbar-snap-objects'),
-                            active: canvas.snapObjects,
-                            showLabel: true,
-                          ),
-                        ],
+                          items: const [
+                            DropdownMenuItem(value: 'mm', child: Text('mm')),
+                            DropdownMenuItem(value: 'cm', child: Text('cm')),
+                            DropdownMenuItem(value: 'px', child: Text('px')),
+                          ],
+                          onChanged: (value) {
+                            if (value == null) return;
+                            _updateCanvasSetting(
+                              (canvas) => canvas.setUnit(value),
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
+                      const _BarDivider(),
+                      BlocBuilder<CanvasBloc, CanvasState>(
+                        builder: (context, canvas) => Row(
+                          children: [
+                            _barButton(
+                              canvas.showGrid ? Icons.grid_on : Icons.grid_off,
+                              l10n.grid,
+                              () => _updateCanvasSetting(
+                                (bloc) => bloc.toggleGrid(),
+                              ),
+                              key: const ValueKey('toolbar-grid'),
+                              active: canvas.showGrid,
+                              showLabel: !compact,
+                            ),
+                            _barButton(
+                              Icons.grid_4x4,
+                              l10n.snapGrid,
+                              () => _updateCanvasSetting(
+                                (bloc) => bloc.setSnapGrid(!canvas.snapGrid),
+                              ),
+                              key: const ValueKey('toolbar-snap-grid'),
+                              active: canvas.snapGrid,
+                              showLabel: !compact,
+                            ),
+                            _barButton(
+                              Icons.hub_outlined,
+                              l10n.snapObjects,
+                              () => _updateCanvasSetting(
+                                (bloc) =>
+                                    bloc.setSnapObjects(!canvas.snapObjects),
+                              ),
+                              key: const ValueKey('toolbar-snap-objects'),
+                              active: canvas.snapObjects,
+                              showLabel: !compact,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
           const Divider(height: 1, thickness: 1),
@@ -1111,22 +1127,28 @@ class _WorkspacePageState extends State<WorkspacePage> {
                   (MoeTool.eyedropper, l10n.toolEyedropper, Icons.colorize),
                   (MoeTool.outline, l10n.toolOutline, Icons.line_weight),
                 ];
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (final (tool, label, icon) in tools)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: _toolShortcut(
-                            tool,
-                            label,
-                            icon,
-                            selected: toolState.active == tool,
-                          ),
-                        ),
-                    ],
-                  ),
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 860;
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final (tool, label, icon) in tools)
+                            Padding(
+                              padding: EdgeInsets.only(right: compact ? 2 : 4),
+                              child: _toolShortcut(
+                                tool,
+                                label,
+                                icon,
+                                compact: compact,
+                                selected: toolState.active == tool,
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -1141,31 +1163,51 @@ class _WorkspacePageState extends State<WorkspacePage> {
     String label,
     IconData icon, {
     required bool selected,
-  }) => OutlinedButton.icon(
-    key: ValueKey('top-tool-${tool.name}'),
-    onPressed: () => context.read<ToolBloc>().select(tool),
-    icon: Icon(icon, size: 17),
-    label: Text(
-      label,
-      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
-    ),
-    style: OutlinedButton.styleFrom(
-      foregroundColor: selected
-          ? const Color(0xff174f78)
-          : const Color(0xff263b4f),
-      backgroundColor: selected
-          ? const Color(0xffdcecf8)
-          : const Color(0xfffbfcfd),
-      minimumSize: const Size(0, 38),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      side: BorderSide(
-        color: selected ? const Color(0xff477da5) : const Color(0xff899aaa),
-        width: selected ? 1.5 : 1.1,
+    required bool compact,
+  }) {
+    final foreground = selected
+        ? const Color(0xff174f78)
+        : const Color(0xff263b4f);
+    final background = selected
+        ? const Color(0xffdcecf8)
+        : const Color(0xfffbfcfd);
+    final border = selected ? const Color(0xff477da5) : const Color(0xff899aaa);
+    if (compact) {
+      return IconButton(
+        key: ValueKey('top-tool-${tool.name}'),
+        tooltip: label,
+        onPressed: () => context.read<ToolBloc>().select(tool),
+        icon: Icon(icon, size: 17),
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+        style: IconButton.styleFrom(
+          foregroundColor: foreground,
+          backgroundColor: background,
+          side: BorderSide(color: border, width: selected ? 1.5 : 1.1),
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+        ),
+      );
+    }
+    return OutlinedButton.icon(
+      key: ValueKey('top-tool-${tool.name}'),
+      onPressed: () => context.read<ToolBloc>().select(tool),
+      icon: Icon(icon, size: 17),
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
-      visualDensity: VisualDensity.compact,
-    ),
-  );
+      style: OutlinedButton.styleFrom(
+        foregroundColor: foreground,
+        backgroundColor: background,
+        minimumSize: const Size(0, 38),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        side: BorderSide(color: border, width: selected ? 1.5 : 1.1),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
 
   Widget _barButton(
     IconData icon,
