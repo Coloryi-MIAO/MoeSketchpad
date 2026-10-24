@@ -94,6 +94,80 @@ void main() {
     },
   );
 
+  test(
+    'repairs a model response missing required geometry fields once',
+    () async {
+      final settings = _MemoryAiSettings()
+        ..values.addAll({
+          'endpoint': 'http://localhost:8080/v1',
+          'model': 'test-model',
+          'key': 'test-secret',
+        });
+      var requests = 0;
+      final client = MockClient((request) async {
+        requests++;
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final messages = body['messages'] as List<dynamic>;
+        if (requests == 1) {
+          expect(messages, hasLength(2));
+          return http.Response(
+            jsonEncode({
+              'choices': [
+                {
+                  'message': {
+                    'content': jsonEncode({
+                      'summary': 'A point',
+                      'objects': [
+                        {'id': 'ai-point-1'},
+                      ],
+                    }),
+                  },
+                },
+              ],
+            }),
+            200,
+          );
+        }
+
+        expect(messages, hasLength(4));
+        expect(messages.last['content'], contains('must include'));
+        return http.Response(
+          jsonEncode({
+            'choices': [
+              {
+                'message': {
+                  'content': jsonEncode({
+                    'summary': 'A point',
+                    'objects': [
+                      {
+                        'id': 'ai-point-1',
+                        'kind': 'point',
+                        'points': [
+                          {'x': 1, 'y': 2},
+                        ],
+                      },
+                    ],
+                  }),
+                },
+              },
+            ],
+          }),
+          200,
+        );
+      });
+      final bloc = AiBloc(client: client, settings: settings);
+      await bloc.loadSettings();
+
+      await bloc.sendPrompt('Create a point.', document);
+
+      expect(requests, 2);
+      expect(bloc.state.preview?.addedObjects, 1);
+      expect(bloc.state.error, isNull);
+      expect(bloc.state.applied, isFalse);
+      await bloc.close();
+    },
+  );
+
   test('rejects insecure remote endpoints before storing a key', () async {
     final settings = _MemoryAiSettings();
     var requestCount = 0;

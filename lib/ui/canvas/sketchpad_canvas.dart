@@ -32,6 +32,8 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
   Offset? _freehandScreen;
   Offset? _rubberStart;
   Offset? _rubberCurrent;
+  Offset? _shapeDragStart;
+  Offset? _shapeDragCurrent;
   GeometryDocument? _dragBefore;
   GeometryDocument? _dragDocument;
   Map<int, Point2>? _dragOriginalPoints;
@@ -223,7 +225,6 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
               kind: GeometryKind.triangle,
               points: List.of(_draftPoints),
               params: const {'triangleType': 'free'},
-              style: const ObjectStyle(fillColor: 0x1f296fa8),
             ),
           );
           _draftPoints.clear();
@@ -246,58 +247,8 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
         context.read<CanvasBloc>().zoomAt(details.localPosition, 1.35);
       case MoeTool.rectangle:
       case MoeTool.ellipse:
-        _draftPoints.add(snapped);
-        if (_draftPoints.length == 2) {
-          final first = _draftPoints.first;
-          final second = _draftPoints.last;
-          if (_isDegeneratePair(first, second, canvas)) {
-            _draftPoints.clear();
-            _showDegenerateGeometry();
-            setState(() {});
-            return;
-          }
-          final left = math.min(first.x, second.x);
-          final right = math.max(first.x, second.x);
-          final top = math.min(first.y, second.y);
-          final bottom = math.max(first.y, second.y);
-          final id = '${tool.name}-${DateTime.now().microsecondsSinceEpoch}';
-          if (tool == MoeTool.rectangle) {
-            _addObject(
-              GeometryObject(
-                id: id,
-                kind: GeometryKind.polygon,
-                points: [
-                  Point2(left, top),
-                  Point2(right, top),
-                  Point2(right, bottom),
-                  Point2(left, bottom),
-                ],
-                params: const {'shape': 'rectangle'},
-                style: const ObjectStyle(fillColor: 0x1f296fa8),
-              ),
-            );
-          } else {
-            final center = Point2((left + right) / 2, (top + bottom) / 2);
-            final rx = (right - left) / 2;
-            final ry = (bottom - top) / 2;
-            _addObject(
-              GeometryObject(
-                id: id,
-                kind: GeometryKind.conic,
-                points: [center, Point2(left, top), Point2(right, bottom)],
-                params: {
-                  'conicType': 'ellipse',
-                  'a': rx,
-                  'b': ry,
-                  'rotation': 0,
-                },
-                style: const ObjectStyle(fillColor: 0x1f296fa8),
-              ),
-            );
-          }
-          _draftPoints.clear();
-        }
-        setState(() {});
+        // Rectangle and ellipse tools use press-drag-release like CDR.
+        break;
       case MoeTool.text:
         _showTextDialog(snapped);
       case MoeTool.freehand:
@@ -574,7 +525,6 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
         id: 'polygon-${DateTime.now().microsecondsSinceEpoch}',
         kind: GeometryKind.polygon,
         points: List.of(_draftPoints),
-        style: const ObjectStyle(fillColor: 0x1f296fa8),
       ),
     );
     setState(_draftPoints.clear);
@@ -590,6 +540,12 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
         ..clear()
         ..add(canvas.screenToWorld(details.localPosition));
       _freehandScreen = details.localPosition;
+      setState(() {});
+      return;
+    }
+    if (tool == MoeTool.rectangle || tool == MoeTool.ellipse) {
+      _shapeDragStart = details.localPosition;
+      _shapeDragCurrent = details.localPosition;
       setState(() {});
       return;
     }
@@ -639,6 +595,21 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
       }
       return;
     }
+    if (_shapeDragStart != null) {
+      setState(() {
+        final current = details.localPosition;
+        if (HardwareKeyboard.instance.isShiftPressed) {
+          final delta = current - _shapeDragStart!;
+          final side = math.max(delta.dx.abs(), delta.dy.abs());
+          _shapeDragCurrent =
+              _shapeDragStart! +
+              Offset(delta.dx < 0 ? -side : side, delta.dy < 0 ? -side : side);
+        } else {
+          _shapeDragCurrent = current;
+        }
+      });
+      return;
+    }
     if (tool == MoeTool.pan ||
         (tool == MoeTool.select &&
             HardwareKeyboard.instance.logicalKeysPressed.contains(
@@ -670,6 +641,9 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
   }
 
   void _handlePanEnd(DragEndDetails details) {
+    if (_shapeDragStart != null && _shapeDragCurrent != null) {
+      _finishShapeDrag();
+    }
     if (_freehandPoints.length > 1) {
       final document = context.read<DocumentBloc>().state.active.document;
       final now = DateTime.now().microsecondsSinceEpoch;
@@ -716,6 +690,63 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
       });
     }
     _clearDrag();
+  }
+
+  void _finishShapeDrag() {
+    final start = _shapeDragStart!;
+    final current = _shapeDragCurrent!;
+    _shapeDragStart = null;
+    _shapeDragCurrent = null;
+    final tool = context.read<ToolBloc>().state.active;
+    final canvas = context.read<CanvasBloc>().state;
+    final document = context.read<DocumentBloc>().state.active.document;
+    final index = _spatialIndex(document);
+    final first = _snap(canvas.screenToWorld(start), document, index);
+    final second = _snap(canvas.screenToWorld(current), document, index);
+    if (_isDegeneratePair(first, second, canvas)) {
+      _showDegenerateGeometry();
+      setState(() {});
+      return;
+    }
+    final left = math.min(first.x, second.x);
+    final right = math.max(first.x, second.x);
+    final top = math.min(first.y, second.y);
+    final bottom = math.max(first.y, second.y);
+    final id = '${tool.name}-${DateTime.now().microsecondsSinceEpoch}';
+    if (tool == MoeTool.rectangle) {
+      _addObject(
+        GeometryObject(
+          id: id,
+          kind: GeometryKind.polygon,
+          points: [
+            Point2(left, top),
+            Point2(right, top),
+            Point2(right, bottom),
+            Point2(left, bottom),
+          ],
+          params: const {'shape': 'rectangle'},
+        ),
+      );
+    } else {
+      _addObject(
+        GeometryObject(
+          id: id,
+          kind: GeometryKind.conic,
+          points: [
+            Point2((left + right) / 2, (top + bottom) / 2),
+            Point2(left, top),
+            Point2(right, bottom),
+          ],
+          params: {
+            'conicType': 'ellipse',
+            'a': (right - left) / 2,
+            'b': (bottom - top) / 2,
+            'rotation': 0,
+          },
+        ),
+      );
+    }
+    setState(() {});
   }
 
   void _clearDrag() {
@@ -909,6 +940,7 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
                                           },
                                           child: Stack(
                                             fit: StackFit.expand,
+                                            clipBehavior: Clip.hardEdge,
                                             children: [
                                               RepaintBoundary(
                                                 child: CustomPaint(
@@ -953,6 +985,22 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
                                                             _rubberCurrent!,
                                                           )
                                                         : null,
+                                                    shapePreview:
+                                                        _shapeDragStart !=
+                                                                null &&
+                                                            _shapeDragCurrent !=
+                                                                null
+                                                        ? Rect.fromPoints(
+                                                            _shapeDragStart!,
+                                                            _shapeDragCurrent!,
+                                                          )
+                                                        : null,
+                                                    shapePreviewEllipse:
+                                                        context
+                                                            .read<ToolBloc>()
+                                                            .state
+                                                            .active ==
+                                                        MoeTool.ellipse,
                                                     animationSample: sample,
                                                     animatedTargetId:
                                                         animation?.targetId,

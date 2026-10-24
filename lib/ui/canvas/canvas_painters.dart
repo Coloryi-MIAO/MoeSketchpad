@@ -83,15 +83,19 @@ class GeometryPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
     final viewport = canvasState.visibleBounds;
     final objects = spatialIndex.query(viewport);
     for (final object in objects) {
       _paintObject(canvas, object, viewport, size);
     }
-    if (canvasState.zoom < 0.004) return;
-    for (final view in measurements) {
-      _paintMeasurement(canvas, view);
+    if (canvasState.zoom >= 0.004) {
+      for (final view in measurements) {
+        _paintMeasurement(canvas, view);
+      }
     }
+    canvas.restore();
   }
 
   void _paintObject(
@@ -553,6 +557,8 @@ class CanvasOverlayPainter extends CustomPainter {
     required this.draftPoints,
     required this.cute,
     required this.rubberBand,
+    required this.shapePreview,
+    required this.shapePreviewEllipse,
     required this.animationSample,
     required this.animatedTargetId,
     required this.showOrigin,
@@ -564,6 +570,8 @@ class CanvasOverlayPainter extends CustomPainter {
   final List<Point2> draftPoints;
   final bool cute;
   final Rect? rubberBand;
+  final Rect? shapePreview;
+  final bool shapePreviewEllipse;
   final AnimationSample? animationSample;
   final String? animatedTargetId;
   final bool showOrigin;
@@ -572,6 +580,8 @@ class CanvasOverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
     for (final id in selectedIds) {
       final object = document.objectById(id);
       if (object == null) continue;
@@ -633,6 +643,17 @@ class CanvasOverlayPainter extends CustomPainter {
           ..strokeWidth = 1,
       );
     }
+    if (shapePreview != null) {
+      final paint = Paint()
+        ..color = _accent
+        ..strokeWidth = 1.4
+        ..style = PaintingStyle.stroke;
+      if (shapePreviewEllipse) {
+        canvas.drawOval(shapePreview!, paint);
+      } else {
+        canvas.drawRect(shapePreview!, paint);
+      }
+    }
     if (animationSample != null && animatedTargetId != null) {
       if (animationSample!.trail.isNotEmpty) {
         final trailPaint = Paint()
@@ -684,6 +705,7 @@ class CanvasOverlayPainter extends CustomPainter {
           ..style = PaintingStyle.stroke,
       );
     }
+    canvas.restore();
   }
 
   @override

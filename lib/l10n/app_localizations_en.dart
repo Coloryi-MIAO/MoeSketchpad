@@ -33,9 +33,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuText => 'Text (T)';
 
   @override
-  String get menuTable => 'Table (A)';
-
-  @override
   String get menuTools => 'Tools (O)';
 
   @override
@@ -55,6 +52,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get saveAs => 'Save As';
+
+  @override
+  String get saveFileNameTitle => 'Save document';
+
+  @override
+  String get saveFileNameLabel => 'File name';
+
+  @override
+  String get invalidSaveFileName =>
+      'Enter a valid file name without paths or reserved characters.';
+
+  @override
+  String get continueLabel => 'Continue';
 
   @override
   String get undo => 'Undo';
@@ -237,6 +247,45 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get statusToolHintPan => 'Drag the canvas to pan.';
+
+  @override
+  String get statusToolHintZoom =>
+      'Click the canvas to zoom in; use the wheel for continuous zoom.';
+
+  @override
+  String get statusToolHintRectangle =>
+      'Drag to draw a rectangle; hold Shift to draw a square.';
+
+  @override
+  String get statusToolHintEllipse =>
+      'Drag to draw an ellipse; hold Shift to draw a circle.';
+
+  @override
+  String get statusToolHintFunction =>
+      'Click the canvas to enter a function and its domain.';
+
+  @override
+  String get statusToolHintText => 'Click the canvas to enter and place text.';
+
+  @override
+  String get statusToolHintFreehand =>
+      'Press and drag to draw a freehand curve.';
+
+  @override
+  String get statusToolHintFill =>
+      'Click a closed shape to set its fill color.';
+
+  @override
+  String get statusToolHintTransparency =>
+      'Click an object to adjust its opacity.';
+
+  @override
+  String get statusToolHintEyedropper =>
+      'Click an object to sample its stroke color.';
+
+  @override
+  String get statusToolHintOutline =>
+      'Click an object to adjust its stroke width and color.';
 
   @override
   String get statusToolHintMeasurement =>
@@ -535,6 +584,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get labelEdit => 'Edit label';
+
+  @override
+  String get strokeColor => 'Stroke color';
 
   @override
   String get apply => 'Apply';

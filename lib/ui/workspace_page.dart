@@ -19,6 +19,7 @@ import '../bloc/tool_bloc.dart';
 import '../build_info.dart';
 import '../l10n/app_localizations.dart';
 import '../platform/close_guard.dart';
+import '../platform/document_file_name.dart';
 import '../platform/file_service.dart';
 import 'canvas/sketchpad_canvas.dart';
 import 'dialogs/about_dialog.dart';
@@ -138,10 +139,13 @@ class _WorkspacePageState extends State<WorkspacePage> {
     final documentBloc = context.read<DocumentBloc>();
     final canvasBloc = context.read<CanvasBloc>();
     final tab = documentBloc.state.active;
+    final webFileName = kIsWeb ? await _requestWebFileName(tab, l10n) : null;
+    if (!mounted) return false;
+    if (kIsWeb && webFileName == null) return false;
     final password = await showPasswordDialog(
       context,
       saving: true,
-      fileName: _tabName(l10n, tab),
+      fileName: webFileName ?? _tabName(l10n, tab),
     );
     if (password == null) return false;
     try {
@@ -153,7 +157,12 @@ class _WorkspacePageState extends State<WorkspacePage> {
         compress: true,
       );
       String? path;
-      if (saveAs || tab.path == null) {
+      if (kIsWeb) {
+        path = await FileService.saveDocument(
+          suggestedName: webFileName!,
+          bytes: bytes,
+        );
+      } else if (saveAs || tab.path == null) {
         path = await FileService.saveDocument(
           suggestedName: tab.path == null
               ? '${l10n.untitled(tab.untitledIndex)}.moesp'
@@ -178,10 +187,75 @@ class _WorkspacePageState extends State<WorkspacePage> {
     return false;
   }
 
+  Future<String?> _requestWebFileName(
+    DocumentTab tab,
+    AppLocalizations l10n,
+  ) async {
+    final controller = TextEditingController(
+      text: tab.path == null
+          ? l10n.untitled(tab.untitledIndex)
+          : p.basenameWithoutExtension(tab.path!),
+    );
+    String? error;
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            void submit() {
+              late String normalized;
+              try {
+                normalized = normalizeMoespFileName(controller.text);
+              } on FormatException {
+                setDialogState(() => error = l10n.invalidSaveFileName);
+                return;
+              }
+              Navigator.of(dialogContext).pop(normalized);
+            }
+
+            return AlertDialog(
+              title: Text(l10n.saveFileNameTitle),
+              content: TextField(
+                key: const ValueKey('web-save-file-name'),
+                controller: controller,
+                autofocus: true,
+                maxLength: 120,
+                decoration: InputDecoration(
+                  labelText: l10n.saveFileNameLabel,
+                  suffixText: '.moesp',
+                  errorText: error,
+                ),
+                onSubmitted: (_) => submit(),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(l10n.cancel),
+                ),
+                FilledButton(
+                  key: const ValueKey('web-save-file-name-confirm'),
+                  onPressed: submit,
+                  child: Text(l10n.continueLabel),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
   Future<void> _openFile() async {
-    final picked = await FileService.openDocument();
-    if (picked == null || !mounted) return;
-    await _openPicked(picked);
+    final l10n = AppLocalizations.of(context);
+    try {
+      final picked = await FileService.openDocument();
+      if (picked == null || !mounted) return;
+      await _openPicked(picked);
+    } on Object catch (error) {
+      _showError(l10n.openFailed('$error'));
+    }
   }
 
   Future<void> _openPicked(PickedFile picked) async {
@@ -415,8 +489,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
         _addAnimation();
       case 'label':
         _addTextAnnotation();
-      case 'insertTable':
-        _insertTable();
       case 'exportPage':
         _exportSvg();
       case 'closeTab':
@@ -490,39 +562,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
     } finally {
       controller.dispose();
     }
-  }
-
-  void _insertTable() {
-    final origin = context.read<CanvasBloc>().state.origin;
-    const rows = 3;
-    const columns = 3;
-    const cellSize = 48.0;
-    var document = context.read<DocumentBloc>().state.active.document;
-    final now = DateTime.now().microsecondsSinceEpoch;
-    final style = ObjectStyle(strokeColor: 0xff52697d, strokeWidth: 1.2);
-    for (var row = 0; row <= rows; row++) {
-      final y = origin.y + row * cellSize;
-      document = document.withObject(
-        GeometryObject(
-          id: 'table-$now-row-$row',
-          kind: GeometryKind.segment,
-          points: [origin, Point2(origin.x + columns * cellSize, y)],
-          style: style,
-        ),
-      );
-    }
-    for (var column = 0; column <= columns; column++) {
-      final x = origin.x + column * cellSize;
-      document = document.withObject(
-        GeometryObject(
-          id: 'table-$now-column-$column',
-          kind: GeometryKind.segment,
-          points: [Point2(x, origin.y), Point2(x, origin.y + rows * cellSize)],
-          style: style,
-        ),
-      );
-    }
-    context.read<DocumentBloc>().commitDocument(document);
   }
 
   Future<void> _exportSvg() async {
@@ -718,7 +757,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
                         const Expanded(child: SketchpadCanvas()),
                         RightDock(
                           cute: themeState.cute,
-                          collapsed: _dockCollapsed,
+                          collapsed:
+                              _dockCollapsed ||
+                              MediaQuery.sizeOf(context).width < 640,
                           onToggle: () =>
                               setState(() => _dockCollapsed = !_dockCollapsed),
                           onAddMeasurement: _addMeasurement,
@@ -775,9 +816,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
       ], compact: width < 860),
       _topMenu(l10n.menuText, [
         _menuItem('label', l10n.toolText, Icons.text_fields),
-      ], compact: width < 860),
-      _topMenu(l10n.menuTable, [
-        _menuItem('insertTable', l10n.menuTable, Icons.table_chart_outlined),
       ], compact: width < 860),
       _topMenu(l10n.menuTools, [
         _menuItem('settings', l10n.settings, Icons.settings_outlined),
@@ -890,8 +928,18 @@ class _WorkspacePageState extends State<WorkspacePage> {
   }
 
   Widget _standardBar(AppLocalizations l10n, DocumentState documentState) {
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 1500;
+    final toolColumns = ((width - 20) / 60).floor().clamp(
+      1,
+      MoeTool.values.length,
+    );
+    final toolRows = compact
+        ? (MoeTool.values.length + toolColumns - 1) ~/ toolColumns
+        : 1;
+    final toolRowHeight = compact ? toolRows * 46.0 : 43.0;
     return Container(
-      height: 96,
+      height: 53 + toolRowHeight,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       decoration: const BoxDecoration(
         color: Color(0xfff5f7f9),
@@ -904,7 +952,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final compact = constraints.maxWidth < 860;
+                final compact = constraints.maxWidth < 1500;
                 return SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -1104,7 +1152,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
           ),
           const Divider(height: 1, thickness: 1),
           SizedBox(
-            height: 43,
+            height: toolRowHeight,
             child: BlocBuilder<ToolBloc, ToolState>(
               builder: (context, toolState) {
                 final tools = <(MoeTool, String, IconData)>[
@@ -1129,24 +1177,33 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 ];
                 return LayoutBuilder(
                   builder: (context, constraints) {
-                    final compact = constraints.maxWidth < 860;
+                    final compact = constraints.maxWidth < 1500;
+                    final children = [
+                      for (final (tool, label, icon) in tools)
+                        Padding(
+                          padding: EdgeInsets.only(right: compact ? 2 : 4),
+                          child: _toolShortcut(
+                            tool,
+                            label,
+                            icon,
+                            compact: compact,
+                            selected: toolState.active == tool,
+                          ),
+                        ),
+                    ];
+                    if (compact) {
+                      return Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(
+                          spacing: 0,
+                          runSpacing: 0,
+                          children: children,
+                        ),
+                      );
+                    }
                     return SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          for (final (tool, label, icon) in tools)
-                            Padding(
-                              padding: EdgeInsets.only(right: compact ? 2 : 4),
-                              child: _toolShortcut(
-                                tool,
-                                label,
-                                icon,
-                                compact: compact,
-                                selected: toolState.active == tool,
-                              ),
-                            ),
-                        ],
-                      ),
+                      child: Row(children: children),
                     );
                   },
                 );
@@ -1166,26 +1223,53 @@ class _WorkspacePageState extends State<WorkspacePage> {
     required bool compact,
   }) {
     final foreground = selected
-        ? const Color(0xff174f78)
+        ? const Color(0xff103f63)
         : const Color(0xff263b4f);
     final background = selected
-        ? const Color(0xffdcecf8)
+        ? const Color(0xffc9e5f8)
         : const Color(0xfffbfcfd);
-    final border = selected ? const Color(0xff477da5) : const Color(0xff899aaa);
+    final border = selected ? const Color(0xff17689e) : const Color(0xff899aaa);
     if (compact) {
-      return IconButton(
-        key: ValueKey('top-tool-${tool.name}'),
-        tooltip: label,
-        onPressed: () => context.read<ToolBloc>().select(tool),
-        icon: Icon(icon, size: 17),
-        visualDensity: VisualDensity.compact,
-        constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-        style: IconButton.styleFrom(
-          foregroundColor: foreground,
-          backgroundColor: background,
-          side: BorderSide(color: border, width: selected ? 1.5 : 1.1),
-          padding: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+      return Tooltip(
+        message: '$label\n${_toolHint(AppLocalizations.of(context), tool)}',
+        child: SizedBox(
+          key: ValueKey('top-tool-${tool.name}'),
+          width: 58,
+          height: 44,
+          child: Material(
+            color: background,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(color: border, width: selected ? 2 : 1.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: InkWell(
+              onTap: () => context.read<ToolBloc>().select(tool),
+              borderRadius: BorderRadius.circular(4),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 17, color: foreground),
+                  const SizedBox(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 9,
+                        height: 1,
+                        color: foreground,
+                        fontWeight: selected
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       );
     }
@@ -1435,50 +1519,105 @@ class _WorkspacePageState extends State<WorkspacePage> {
     );
   }
 
+  String _toolHint(AppLocalizations l10n, MoeTool tool) => switch (tool) {
+    MoeTool.select => l10n.statusToolHintSelect,
+    MoeTool.point => l10n.statusToolHintPoint,
+    MoeTool.segment => l10n.statusToolHintSegment,
+    MoeTool.line => l10n.statusToolHintLine,
+    MoeTool.circle => l10n.statusToolHintCircle,
+    MoeTool.triangle => l10n.statusToolHintTriangle,
+    MoeTool.polygon => l10n.statusToolHintPolygon,
+    MoeTool.function => l10n.statusToolHintFunction,
+    MoeTool.text => l10n.statusToolHintText,
+    MoeTool.pan => l10n.statusToolHintPan,
+    MoeTool.zoom => l10n.statusToolHintZoom,
+    MoeTool.rectangle => l10n.statusToolHintRectangle,
+    MoeTool.ellipse => l10n.statusToolHintEllipse,
+    MoeTool.freehand => l10n.statusToolHintFreehand,
+    MoeTool.fill => l10n.statusToolHintFill,
+    MoeTool.transparency => l10n.statusToolHintTransparency,
+    MoeTool.eyedropper => l10n.statusToolHintEyedropper,
+    MoeTool.outline => l10n.statusToolHintOutline,
+  };
+
   Widget _statusBar(AppLocalizations l10n, DocumentTab tab) {
     return BlocBuilder<CanvasBloc, CanvasState>(
-      builder: (context, canvas) => Container(
-        height: 23,
-        padding: const EdgeInsets.symmetric(horizontal: 9),
-        decoration: const BoxDecoration(
-          color: Color(0xfffcfcfc),
-          border: Border(top: BorderSide(color: Color(0xffd8dce1))),
-        ),
-        child: Row(
-          children: [
-            Text(
-              l10n.statusObjects(tab.document.objects.length),
-              style: const TextStyle(fontSize: 10, color: Color(0xff485c6e)),
-            ),
-            const SizedBox(width: 14),
-            if (canvas.cursorWorld != null)
+      builder: (context, canvas) {
+        final width = MediaQuery.sizeOf(context).width;
+        final tool = context.watch<ToolBloc>().state.active;
+        return Container(
+          height: 25,
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          decoration: const BoxDecoration(
+            color: Color(0xfffcfcfc),
+            border: Border(top: BorderSide(color: Color(0xffd8dce1))),
+          ),
+          child: Row(
+            children: [
               Text(
-                'x ${canvas.cursorWorld!.x.toStringAsFixed(2)}  y ${canvas.cursorWorld!.y.toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 10, color: Color(0xff5e7080)),
+                l10n.statusObjects(tab.document.objects.length),
+                style: const TextStyle(fontSize: 10, color: Color(0xff485c6e)),
               ),
-            const Spacer(),
-            Text(
-              l10n.statusOrigin(
-                canvas.origin.x.toStringAsFixed(1),
-                canvas.origin.y.toStringAsFixed(1),
+              const SizedBox(width: 10),
+              Icon(Icons.info_outline, size: 13, color: Color(0xff35688d)),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  _toolHint(l10n, tool),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xff314f67),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-              style: const TextStyle(fontSize: 9.5, color: Color(0xff77899a)),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              l10n.statusZoom((canvas.zoom * 100).round()),
-              style: const TextStyle(fontSize: 10, color: Color(0xff485c6e)),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              tab.path ?? l10n.untitled(tab.untitledIndex),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 9.5, color: Color(0xff77899a)),
-            ),
-          ],
-        ),
-      ),
+              if (width >= 1000 && canvas.cursorWorld != null) ...[
+                const SizedBox(width: 12),
+                Text(
+                  'x ${canvas.cursorWorld!.x.toStringAsFixed(2)}  '
+                  'y ${canvas.cursorWorld!.y.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xff5e7080),
+                  ),
+                ),
+              ],
+              if (width >= 820) ...[
+                const SizedBox(width: 12),
+                Text(
+                  l10n.statusOrigin(
+                    canvas.origin.x.toStringAsFixed(1),
+                    canvas.origin.y.toStringAsFixed(1),
+                  ),
+                  style: const TextStyle(
+                    fontSize: 9.5,
+                    color: Color(0xff77899a),
+                  ),
+                ),
+              ],
+              const SizedBox(width: 12),
+              Text(
+                l10n.statusZoom((canvas.zoom * 100).round()),
+                style: const TextStyle(fontSize: 10, color: Color(0xff485c6e)),
+              ),
+              if (width >= 1200) ...[
+                const SizedBox(width: 12),
+                Text(
+                  tab.path ?? l10n.untitled(tab.untitledIndex),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 9.5,
+                    color: Color(0xff77899a),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

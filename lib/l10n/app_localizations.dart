@@ -146,12 +146,6 @@ abstract class AppLocalizations {
   /// **'文本(T)'**
   String get menuText;
 
-  /// No description provided for @menuTable.
-  ///
-  /// In zh, this message translates to:
-  /// **'表格(A)'**
-  String get menuTable;
-
   /// No description provided for @menuTools.
   ///
   /// In zh, this message translates to:
@@ -193,6 +187,30 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'另存为'**
   String get saveAs;
+
+  /// No description provided for @saveFileNameTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存文档'**
+  String get saveFileNameTitle;
+
+  /// No description provided for @saveFileNameLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件名'**
+  String get saveFileNameLabel;
+
+  /// No description provided for @invalidSaveFileName.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入有效文件名，不能包含路径或系统保留字符。'**
+  String get invalidSaveFileName;
+
+  /// No description provided for @continueLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续'**
+  String get continueLabel;
 
   /// No description provided for @undo.
   ///
@@ -535,6 +553,66 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'拖动画布平移视口。'**
   String get statusToolHintPan;
+
+  /// No description provided for @statusToolHintZoom.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击画布放大；滚轮可连续缩放。'**
+  String get statusToolHintZoom;
+
+  /// No description provided for @statusToolHintRectangle.
+  ///
+  /// In zh, this message translates to:
+  /// **'按住拖动画出矩形；按住 Shift 绘制正方形。'**
+  String get statusToolHintRectangle;
+
+  /// No description provided for @statusToolHintEllipse.
+  ///
+  /// In zh, this message translates to:
+  /// **'按住拖动画出椭圆；按住 Shift 绘制圆。'**
+  String get statusToolHintEllipse;
+
+  /// No description provided for @statusToolHintFunction.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击画布输入函数表达式并设置定义域。'**
+  String get statusToolHintFunction;
+
+  /// No description provided for @statusToolHintText.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击画布输入并放置文本。'**
+  String get statusToolHintText;
+
+  /// No description provided for @statusToolHintFreehand.
+  ///
+  /// In zh, this message translates to:
+  /// **'按住并拖动画出自由曲线。'**
+  String get statusToolHintFreehand;
+
+  /// No description provided for @statusToolHintFill.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击封闭图形设置填充颜色。'**
+  String get statusToolHintFill;
+
+  /// No description provided for @statusToolHintTransparency.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击对象调整透明度。'**
+  String get statusToolHintTransparency;
+
+  /// No description provided for @statusToolHintEyedropper.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击对象吸取其线条颜色。'**
+  String get statusToolHintEyedropper;
+
+  /// No description provided for @statusToolHintOutline.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击对象调整轮廓线宽与颜色。'**
+  String get statusToolHintOutline;
 
   /// No description provided for @statusToolHintMeasurement.
   ///
@@ -1063,6 +1141,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'编辑标注'**
   String get labelEdit;
+
+  /// No description provided for @strokeColor.
+  ///
+  /// In zh, this message translates to:
+  /// **'线条颜色'**
+  String get strokeColor;
 
   /// No description provided for @apply.
   ///

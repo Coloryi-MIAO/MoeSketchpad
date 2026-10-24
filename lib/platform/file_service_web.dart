@@ -15,33 +15,57 @@ class FileService {
 
   static Future<PickedFile?> openDocument() async {
     final input = html.FileUploadInputElement()
-      ..accept = '.moesp,application/x-moesketchpad'
+      ..accept = '.moesp'
       ..style.display = 'none';
-    html.document.body?.children.add(input);
+    final body = html.document.body;
+    if (body == null) {
+      throw StateError('The browser document body is unavailable.');
+    }
+    body.children.add(input);
     final completer = Completer<PickedFile?>();
-    input.onChange.listen((_) async {
+    late final StreamSubscription<html.Event> changeSubscription;
+    changeSubscription = input.onChange.listen((_) {
       final file = input.files?.isEmpty == true ? null : input.files!.first;
-      input.remove();
       if (file == null) {
-        completer.complete(null);
+        if (!completer.isCompleted) completer.complete(null);
         return;
       }
       final reader = html.FileReader();
+      reader.onLoad.listen((_) {
+        final result = reader.result;
+        final bytes = switch (result) {
+          ByteBuffer buffer => buffer.asUint8List(),
+          Uint8List data => data,
+          _ => null,
+        };
+        if (bytes == null) {
+          if (!completer.isCompleted) {
+            completer.completeError(
+              const FormatException(
+                'Browser could not read the selected file.',
+              ),
+            );
+          }
+          return;
+        }
+        if (!completer.isCompleted) {
+          completer.complete(PickedFile(name: file.name, bytes: bytes));
+        }
+      });
+      reader.onError.listen((_) {
+        if (!completer.isCompleted) {
+          completer.completeError(
+            const FormatException('Browser could not read the selected file.'),
+          );
+        }
+      });
       reader.readAsArrayBuffer(file);
-      await reader.onLoadEnd.first;
-      final result = reader.result;
-      if (result is! ByteBuffer) {
-        completer.completeError(
-          const FormatException('Browser could not read the file.'),
-        );
-        return;
-      }
-      completer.complete(
-        PickedFile(name: file.name, bytes: result.asUint8List()),
-      );
     });
     input.click();
-    return completer.future;
+    return completer.future.whenComplete(() {
+      changeSubscription.cancel();
+      input.remove();
+    });
   }
 
   static Future<String?> saveDocument({
@@ -56,7 +80,7 @@ class FileService {
     html.document.body?.children.add(anchor);
     anchor.click();
     anchor.remove();
-    html.Url.revokeObjectUrl(url);
+    Timer(const Duration(seconds: 30), () => html.Url.revokeObjectUrl(url));
     return suggestedName;
   }
 
@@ -74,7 +98,7 @@ class FileService {
     html.document.body?.children.add(anchor);
     anchor.click();
     anchor.remove();
-    html.Url.revokeObjectUrl(url);
+    Timer(const Duration(seconds: 30), () => html.Url.revokeObjectUrl(url));
     return suggestedName;
   }
 

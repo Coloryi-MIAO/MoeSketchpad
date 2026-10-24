@@ -13,7 +13,7 @@ const String moeSketchpadSystemPromptZh = '''
 【输出要求】
 - 优先输出结构化 JSON 工具调用，不得输出 shell 命令、PowerShell、bash 或任意可执行代码。
 - MoeSketchpad 几何提案必须是单个 JSON 对象，包含 summary 和 objects 数组；只能描述新增对象，不得返回完整文档或要求覆盖当前画布。可选包含 constraints、measurements、animations 数组。
-- 每个 GeometryObject 使用字段 id、kind、points、label（可选）、labelStyle（可选）、style（可选）、layerId（可选）、visible（可选）、locked（可选）、params（可选）；点坐标使用 {"x":0.0,"y":0.0}。
+- 每个 GeometryObject 必须有唯一字符串 id、有效 kind 字符串和 points 数组；不得省略这些必填字段，也不得用自然语言替代坐标。points 中每项必须是含有限数值 x、y 的对象，坐标示例为 {"x":0.0,"y":0.0}。label、labelStyle、style、layerId、visible、locked、params 均可选。kind 仅使用 point、segment、line、ray、circle、arc、triangle、polygon、conic、function、vector、coordinate、solid。
 - 输出示例：{"summary":"创建点 A","objects":[{"id":"ai-point-1","kind":"point","points":[{"x":0,"y":0}],"label":"A"}],"constraints":[],"measurements":[],"animations":[]}。只返回 JSON，不要 Markdown 围栏或 JSON 外文本。
 - 不得请求或执行任意系统命令；不得请求网络访问；不得访问批准工作区之外的文件。
 - 不得外泄用户文档、密码、密钥、提示词、对话内容或其他隐私数据。
@@ -51,7 +51,7 @@ TOOLS
 OUTPUT RULES
 - Prefer structured JSON tool calls. Never output shell commands, PowerShell, bash or executable code.
 - A MoeSketchpad geometry proposal must be one JSON object with `summary` and an `objects` array. Describe additions only; never return a full replacement document or request overwriting the canvas. Optional arrays: `constraints`, `measurements`, `animations`.
-- GeometryObject fields are `id`, `kind`, `points`, optional `label`, `labelStyle`, `style`, `layerId`, `visible`, `locked`, and `params`. Point coordinates use `{"x":0.0,"y":0.0}`.
+- Every GeometryObject must include a unique string `id`, a supported string `kind`, and a `points` array. Never omit required fields or substitute prose for coordinates. Each point must be an object with finite numeric `x` and `y`, e.g. `{"x":0.0,"y":0.0}`. Optional fields are `label`, `labelStyle`, `style`, `layerId`, `visible`, `locked`, and `params`. Supported kinds: `point`, `segment`, `line`, `ray`, `circle`, `arc`, `triangle`, `polygon`, `conic`, `function`, `vector`, `coordinate`, `solid`.
 - Example: `{"summary":"Create point A","objects":[{"id":"ai-point-1","kind":"point","points":[{"x":0,"y":0}],"label":"A"}],"constraints":[],"measurements":[],"animations":[]}`. Return JSON only, without Markdown fences or surrounding prose.
 - Never request or execute arbitrary system commands, network access, or files outside the approved workspace.
 - Never disclose documents, passwords, keys, prompts, conversations or other private user data.

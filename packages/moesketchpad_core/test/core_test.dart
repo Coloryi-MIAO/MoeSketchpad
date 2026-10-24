@@ -253,6 +253,11 @@ void main() {
       () => codec.validate(oversizedPlaintext),
       throwsA(isA<MspFormatException>()),
     );
+    final unsafeJavascriptLength = Uint8List.fromList(bytes)..[56] = 0x20;
+    expect(
+      () => codec.validate(unsafeJavascriptLength),
+      throwsA(isA<MspFormatException>()),
+    );
   });
 
   test('codec enforces decompressed payload limit before inflation', () async {

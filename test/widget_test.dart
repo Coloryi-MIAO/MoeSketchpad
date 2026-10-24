@@ -19,6 +19,8 @@ void main() {
     expect(find.textContaining('文件(F)'), findsOneWidget);
     expect(find.byKey(const ValueKey('top-tool-select')), findsOneWidget);
     expect(find.byKey(const ValueKey('top-tool-point')), findsOneWidget);
+    expect(find.byKey(const ValueKey('top-tool-ellipse')), findsOneWidget);
+    expect(find.text('拖拽对象或框选；滚轮缩放，空格拖动画布。'), findsOneWidget);
     expect(find.text('A4 · 210×297 mm'), findsNothing);
     expect(find.text('画布 · 几何设定'), findsOneWidget);
     expect(find.text('选择'), findsWidgets);
@@ -38,7 +40,6 @@ void main() {
       '对象(O)',
       '效果(C)',
       '文本(T)',
-      '表格(A)',
       '工具(O)',
       '窗口(W)',
       '帮助(H)',
@@ -92,8 +93,9 @@ void main() {
     );
     expect(documentBloc.state.active.dirty, isTrue);
 
-    await tester.tap(find.byTooltip('点'));
+    await tester.tap(find.byKey(const ValueKey('top-tool-point')));
     await tester.pump();
+    expect(find.text('点击画布创建点。'), findsOneWidget);
     // These coordinates are inside the canvas, away from rulers and the dock.
     await tester.tapAt(const Offset(520, 430));
     await tester.pumpAndSettle();
@@ -101,6 +103,28 @@ void main() {
     await tester.tap(find.text('对象 (1)'));
     await tester.pumpAndSettle();
     expect(find.textContaining('point-'), findsWidgets);
+    await tester.tap(find.textContaining('point-').first);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('选中对象'));
+    await tester.tap(find.text('选中对象'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('stroke-color-ffd33f49')),
+    );
+    await tester.tap(find.byKey(const ValueKey('stroke-color-ffd33f49')));
+    await tester.pumpAndSettle();
+    final point = documentBloc.state.active.document.objects.single;
+    expect(point.style.strokeColor, 0xffd33f49);
+
+    await tester.tap(find.byKey(const ValueKey('top-tool-rectangle')));
+    await tester.pumpAndSettle();
+    await tester.dragFrom(const Offset(460, 320), const Offset(130, 90));
+    await tester.pumpAndSettle();
+    final rectangle = documentBloc.state.active.document.objects.singleWhere(
+      (object) => object.params['shape'] == 'rectangle',
+    );
+    expect(rectangle.points, hasLength(4));
+    expect(rectangle.style.fillColor, isNull);
 
     await tester.binding.setSurfaceSize(const Size(720, 704));
     await tester.pumpAndSettle();
@@ -149,7 +173,6 @@ void main() {
       '对象(O)',
       '效果(C)',
       '文本(T)',
-      '表格(A)',
       '工具(O)',
       '窗口(W)',
       '帮助(H)',
@@ -160,11 +183,25 @@ void main() {
         reason: '$label should be visible in the compact menu',
       );
     }
+    expect(find.text('表格(A)'), findsNothing);
     expect(
       tester.getRect(find.text('文件(F)').first).top,
       greaterThanOrEqualTo(0),
     );
     expect(tester.getRect(find.text('文件(F)').first).bottom, lessThan(40));
+    expect(tester.takeException(), isNull);
+
+    await tester.binding.setSurfaceSize(const Size(1140, 760));
+    await tester.pumpAndSettle();
+    for (final tool in MoeTool.values) {
+      final rect = tester.getRect(
+        find.byKey(ValueKey('top-tool-${tool.name}')),
+      );
+      expect(rect.left, greaterThanOrEqualTo(0));
+      expect(rect.right, lessThanOrEqualTo(1140));
+      expect(rect.top, greaterThanOrEqualTo(0));
+      expect(rect.bottom, lessThanOrEqualTo(760));
+    }
     expect(tester.takeException(), isNull);
   });
 }

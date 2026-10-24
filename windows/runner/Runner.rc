@@ -17,7 +17,7 @@
 // English (United States) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
-LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
@@ -87,21 +87,23 @@ VS_VERSION_INFO VERSIONINFO
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-        BLOCK "040904e4"
+        BLOCK "000004B0"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "moesketchpad" "\0"
+            VALUE "Comments", "Cross-platform dynamic geometry sketchpad." "\0"
+            VALUE "CompanyName", "Coloryi-MIAO" "\0"
+            VALUE "FileDescription", "MoeSketchpad Dynamic Geometry Sketchpad" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "moesketchpad" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
+            VALUE "InternalName", "MoeSketchpad" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Coloryi-MIAO. GPL-3.0-only." "\0"
+            VALUE "LegalTrademarks", "MoeSketchpad" "\0"
             VALUE "OriginalFilename", "moesketchpad.exe" "\0"
-            VALUE "ProductName", "moesketchpad" "\0"
+            VALUE "ProductName", "MoeSketchpad" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
     BLOCK "VarFileInfo"
     BEGIN
-        VALUE "Translation", 0x409, 1252
+        VALUE "Translation", 0x0, 1200
     END
 END
 

@@ -318,9 +318,9 @@ class MspCodec {
     for (final byte in nonce) {
       data.setUint8(offset++, byte);
     }
-    data.setUint64(offset, plainLength, Endian.big);
+    _writeUint64(data, offset, plainLength);
     offset += 8;
-    data.setUint64(offset, cipherLength, Endian.big);
+    _writeUint64(data, offset, cipherLength);
     return data.buffer.asUint8List();
   }
 
@@ -360,8 +360,8 @@ class MspCodec {
       throw const MspFormatException('Invalid nonce length.');
     }
     final nonce = bytes.sublist(44, 56);
-    final plainLength = data.getUint64(56, Endian.big);
-    final cipherLength = data.getUint64(64, Endian.big);
+    final plainLength = _readUint64(data, 56);
+    final cipherLength = _readUint64(data, 64);
     if (plainLength > maxPayloadBytes ||
         cipherLength > maxPayloadBytes ||
         _headerLength + cipherLength + _tagLength != bytes.length) {
@@ -375,6 +375,27 @@ class MspCodec {
       plainLength: plainLength,
       cipherLength: cipherLength,
     );
+  }
+
+  static const int _uint32Range = 0x100000000;
+  static const int _maxSafeJavascriptInteger = 0x1fffffffffffff;
+
+  static void _writeUint64(ByteData data, int offset, int value) {
+    if (value < 0 || value > _maxSafeJavascriptInteger) {
+      throw const MspFormatException('Document length is out of range.');
+    }
+    data.setUint32(offset, value ~/ _uint32Range, Endian.big);
+    data.setUint32(offset + 4, value % _uint32Range, Endian.big);
+  }
+
+  static int _readUint64(ByteData data, int offset) {
+    final high = data.getUint32(offset, Endian.big);
+    final low = data.getUint32(offset + 4, Endian.big);
+    final value = high * _uint32Range + low;
+    if (value > _maxSafeJavascriptInteger) {
+      throw const MspFormatException('Document length is out of range.');
+    }
+    return value;
   }
 }
 

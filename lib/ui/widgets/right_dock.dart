@@ -75,6 +75,26 @@ class _RightDockState extends State<RightDock> {
     );
   }
 
+  void _setStrokeColor(
+    BuildContext context,
+    Set<String> selectedIds,
+    int color,
+  ) {
+    if (selectedIds.isEmpty) return;
+    final documents = context.read<DocumentBloc>();
+    final current = documents.state.active.document;
+    var updated = current;
+    for (final id in selectedIds) {
+      final object = current.objectById(id);
+      if (object != null) {
+        updated = updated.withObject(
+          object.copyWith(style: object.style.copyWith(strokeColor: color)),
+        );
+      }
+    }
+    if (!identical(updated, current)) documents.commitDocument(updated);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -449,7 +469,61 @@ class _RightDockState extends State<RightDock> {
                     ),
                     if (object.points.isNotEmpty)
                       _PropertyRow('points', object.points.length.toString()),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 5),
+                    Text(
+                      l10n.strokeColor,
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        color: Color(0xff526576),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 5,
+                      children: [
+                        for (final color in const [
+                          0xff263b4f,
+                          0xff296fa8,
+                          0xffd33f49,
+                          0xff2f855a,
+                          0xff8b5cf6,
+                          0xffe28b1d,
+                          0xff111111,
+                        ])
+                          Tooltip(
+                            message: '#${color.toRadixString(16).substring(2)}',
+                            child: InkWell(
+                              key: ValueKey(
+                                'stroke-color-${color.toRadixString(16)}',
+                              ),
+                              onTap: () => _setStrokeColor(
+                                context,
+                                selection.ids,
+                                color,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                              child: Container(
+                                width: 23,
+                                height: 23,
+                                decoration: BoxDecoration(
+                                  color: Color(color),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: object.style.strokeColor == color
+                                        ? const Color(0xff172b3d)
+                                        : const Color(0xffaeb9c3),
+                                    width: object.style.strokeColor == color
+                                        ? 2
+                                        : 1,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
                     Wrap(
                       spacing: 6,
                       children: [

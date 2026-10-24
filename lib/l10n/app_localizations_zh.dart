@@ -33,9 +33,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get menuText => '文本(T)';
 
   @override
-  String get menuTable => '表格(A)';
-
-  @override
   String get menuTools => '工具(O)';
 
   @override
@@ -55,6 +52,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get saveAs => '另存为';
+
+  @override
+  String get saveFileNameTitle => '保存文档';
+
+  @override
+  String get saveFileNameLabel => '文件名';
+
+  @override
+  String get invalidSaveFileName => '请输入有效文件名，不能包含路径或系统保留字符。';
+
+  @override
+  String get continueLabel => '继续';
 
   @override
   String get undo => '撤销';
@@ -234,6 +243,36 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get statusToolHintPan => '拖动画布平移视口。';
+
+  @override
+  String get statusToolHintZoom => '点击画布放大；滚轮可连续缩放。';
+
+  @override
+  String get statusToolHintRectangle => '按住拖动画出矩形；按住 Shift 绘制正方形。';
+
+  @override
+  String get statusToolHintEllipse => '按住拖动画出椭圆；按住 Shift 绘制圆。';
+
+  @override
+  String get statusToolHintFunction => '点击画布输入函数表达式并设置定义域。';
+
+  @override
+  String get statusToolHintText => '点击画布输入并放置文本。';
+
+  @override
+  String get statusToolHintFreehand => '按住并拖动画出自由曲线。';
+
+  @override
+  String get statusToolHintFill => '点击封闭图形设置填充颜色。';
+
+  @override
+  String get statusToolHintTransparency => '点击对象调整透明度。';
+
+  @override
+  String get statusToolHintEyedropper => '点击对象吸取其线条颜色。';
+
+  @override
+  String get statusToolHintOutline => '点击对象调整轮廓线宽与颜色。';
 
   @override
   String get statusToolHintMeasurement => '选择对象后可添加测量。';
@@ -521,6 +560,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get labelEdit => '编辑标注';
+
+  @override
+  String get strokeColor => '线条颜色';
 
   @override
   String get apply => '应用';

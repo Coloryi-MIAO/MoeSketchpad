@@ -283,61 +283,31 @@ class AiBloc extends Cubit<AiState> {
     );
     try {
       final uri = _completionUri(state.endpoint);
-      final body = jsonEncode({
-        'model': state.model.trim(),
-        'messages': [
-          {'role': 'system', 'content': systemPrompt(language)},
-          {'role': 'user', 'content': userPrompt},
-        ],
-      });
-      if (utf8.encode(body).length > _maxRequestBytes) {
-        throw const FormatException('AI request exceeds the 1 MiB limit.');
-      }
-
-      final request = http.Request('POST', uri)
-        ..headers.addAll({
-          'Authorization': 'Bearer $apiKey',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        })
-        ..followRedirects = false
-        ..body = body;
-      final response = await _client
-          .send(request)
-          .timeout(const Duration(seconds: 60));
-      final bytes = <int>[];
-      final stream = StreamIterator<List<int>>(response.stream);
+      final messages = <Map<String, String>>[
+        {'role': 'system', 'content': systemPrompt(language)},
+        {'role': 'user', 'content': userPrompt},
+      ];
+      var content = await _requestCompletion(uri, apiKey, messages);
+      late String proposal;
       try {
-        await () async {
-          while (await stream.moveNext()) {
-            final chunk = stream.current;
-            if (bytes.length + chunk.length > _maxResponseBytes) {
-              throw const FormatException(
-                'AI response exceeds the 1 MiB limit.',
-              );
-            }
-            bytes.addAll(chunk);
-          }
-        }().timeout(const Duration(seconds: 60));
-      } on TimeoutException {
-        await stream.cancel();
-        rethrow;
-      } catch (_) {
-        await stream.cancel();
-        rethrow;
+        proposal = _extractJsonProposal(content);
+      } on FormatException catch (error) {
+        content = await _requestCompletion(uri, apiKey, [
+          ...messages,
+          {'role': 'assistant', 'content': content},
+          {
+            'role': 'user',
+            'content':
+                'Correct the previous response so it can be imported. '
+                'Validation error: ${error.message}. Return only one JSON '
+                'object with summary and objects. Every object must include '
+                'a unique string id, a supported string kind, and a points '
+                'array of numeric {x,y} coordinates. Do not omit required '
+                'fields, add prose, or use Markdown fences.',
+          },
+        ]);
+        proposal = _extractJsonProposal(content);
       }
-      final responseText = utf8.decode(bytes);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw HttpException(
-          _serverErrorMessage(responseText, response.statusCode, apiKey),
-        );
-      }
-      final decoded = jsonDecode(responseText);
-      final content = _extractContent(decoded);
-      if (content.length > _maxResponseBytes) {
-        throw const FormatException('AI proposal exceeds the 1 MiB limit.');
-      }
-      final proposal = _extractJsonProposal(content);
       preview(proposal, current);
     } on Object catch (error) {
       if (isClosed) return;
@@ -350,6 +320,62 @@ class AiBloc extends Cubit<AiState> {
         ),
       );
     }
+  }
+
+  Future<String> _requestCompletion(
+    Uri uri,
+    String apiKey,
+    List<Map<String, String>> messages,
+  ) async {
+    final body = jsonEncode({
+      'model': state.model.trim(),
+      'messages': messages,
+    });
+    if (utf8.encode(body).length > _maxRequestBytes) {
+      throw const FormatException('AI request exceeds the 1 MiB limit.');
+    }
+
+    final request = http.Request('POST', uri)
+      ..headers.addAll({
+        'Authorization': 'Bearer $apiKey',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      })
+      ..followRedirects = false
+      ..body = body;
+    final response = await _client
+        .send(request)
+        .timeout(const Duration(seconds: 60));
+    final bytes = <int>[];
+    final stream = StreamIterator<List<int>>(response.stream);
+    try {
+      await () async {
+        while (await stream.moveNext()) {
+          final chunk = stream.current;
+          if (bytes.length + chunk.length > _maxResponseBytes) {
+            throw const FormatException('AI response exceeds the 1 MiB limit.');
+          }
+          bytes.addAll(chunk);
+        }
+      }().timeout(const Duration(seconds: 60));
+    } on TimeoutException {
+      await stream.cancel();
+      rethrow;
+    } catch (_) {
+      await stream.cancel();
+      rethrow;
+    }
+    final responseText = utf8.decode(bytes);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HttpException(
+        _serverErrorMessage(responseText, response.statusCode, apiKey),
+      );
+    }
+    final content = _extractContent(jsonDecode(responseText));
+    if (content.length > _maxResponseBytes) {
+      throw const FormatException('AI proposal exceeds the 1 MiB limit.');
+    }
+    return content;
   }
 
   static String? _validateEndpoint(String value) {
@@ -427,6 +453,19 @@ class AiBloc extends Cubit<AiState> {
       throw const FormatException(
         'AI must return an additive proposal with an objects array.',
       );
+    }
+    final objects = decoded['objects'] as List;
+    for (var index = 0; index < objects.length; index++) {
+      final object = objects[index];
+      if (object is! Map ||
+          object['id'] is! String ||
+          object['kind'] is! String ||
+          object['points'] is! List) {
+        throw FormatException(
+          'Object ${index + 1} must include id, kind, and points.',
+        );
+      }
+      GeometryObject.fromJson(object);
     }
     return candidate;
   }

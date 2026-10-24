@@ -196,7 +196,7 @@ AI 面向的 CLI 不执行任意 shell，工具参数按白名单结构化校验
 MaterialApp(locale, theme)
   Scaffold
     Column
-      MenuBar: 文件/编辑/视图/布局/对象/效果/文本/表格/工具/窗口/帮助
+      MenuBar: 文件/编辑/视图/布局/对象/效果/文本/工具/窗口/帮助
       StandardBar: 新建/打开/保存/撤销/重做/缩放/单位/网格/贴齐
       ContextBar: 画布原点 或 选中对象属性
       Row
@@ -212,6 +212,12 @@ MaterialApp(locale, theme)
       StatusBar：对象数/世界坐标/原点/缩放/路径
 ```
 
+- 画布绘制与覆盖层都按画布视口裁剪，不会溢出覆盖工具栏、工具箱或右侧泊坞窗。
+- 矩形/椭圆使用按下并拖动到对角点的 CDR 式手势；按住 Shift 约束为正方形/圆。
+  三角形、矩形、多边形和椭圆默认无填充；选中对象后可直接设置描边颜色。
+- Web 工具条在窄宽度切换为紧凑图标并自动换行。Web 保存先由应用取得安全文件名，
+  再触发浏览器下载；浏览器本身不提供原路径覆盖或任意目录写入。
+- 表格菜单及其插入网格操作已移除。
 - 画布没有页面尺寸、纸张背景或页面边界。旧版文档中的 page 元数据保留用于兼容，
   不影响工作区显示与几何范围。
 - “几何设定”泊坞窗默认展开且位于右侧属性窗顶部；调整设定会更新文档 view 并
@@ -325,10 +331,14 @@ COPYING/NOTICE 全文入口。
 - Web：`flutter build web --release` 通过；`web/manifest.json` PWA；
   `web/_headers` 声明 `application/x-moesketchpad`；favicon/PWA 图标已替换。
   浏览器没有任意文件系统、本地字体枚举、进程或可靠设备密钥；文件保存使用
-  下载，打开使用文件选择器。
+  浏览器下载（应用先询问 `.moesp` 文件名），打开使用浏览器文件选择器；
+  下载目录与覆盖行为由浏览器管理。
 - Windows：`flutter build windows --release`；`windows/runner/resources/app_icon.ico`
   已替换；Inno Setup 脚本 `packaging/windows/moesketchpad.iss` 注册
   `.moesp`、MIME、DefaultIcon、打开命令；`register_moesp.ps1` 供开发用。
+  EXE 版本资源为语言中性 Unicode，并填充产品名、文件描述、公司、版本、版权和原始文件名。
+- Windows/macOS 初始窗口根据主显示器可用尺寸适配；桌面最小窗口约束已降低，
+  窄窗口时自动折叠右侧属性泊坞窗。
 - macOS：`macos/Runner/Info.plist` 已声明 UTI 与 Document Type；AppIcon 资产
   已替换。Windows 上无法构建/验证 macOS，需 macOS runner + Xcode。
 - CI：`.github/workflows/build.yml` 使用 Flutter 3.47.6 矩阵构建 Web/Windows/
@@ -354,7 +364,7 @@ COPYING/NOTICE 全文入口。
 后续里程碑（Copilot 任务见 `copanddsh.txt`）：
 
 1. 内核加固：更多 fuzz/性质测试、交点吸附、约束完整性与性能基准。
-2. Canvas：10 万对象、增量索引、笔迹/矩形/椭圆/文本工具、交点吸附。
+2. Canvas：10 万对象、增量索引、笔迹/文本工具、交点吸附。
 3. 文档：自动保存/崩溃恢复、系统字体枚举（原生）、设备钥匙串、多窗口/最近文件。
 4. 导出：完整 SVG、PNG/PDF、GIF/APNG/MP4（需要验证编码器）。
 5. AI/MCP：更多供应商协议适配、工具 schema 版本化、审计轮转、MCP 客户端传输。
