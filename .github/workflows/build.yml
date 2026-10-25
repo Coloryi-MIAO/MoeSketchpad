@@ -28,7 +28,10 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed lib test packages
       - run: (cd packages/moesketchpad_core && dart pub get && dart analyze && dart test)
       - run: (cd packages/moesketchpad_cli && dart pub get && dart analyze && dart test)
-      - run: flutter analyze
+      - name: Analyze main project
+        run: |
+          dart pub cache repair
+          flutter analyze
       - run: flutter test
       - name: Build web
         run: flutter build web --release --dart-define=MSP_COMMIT=${{ github.sha }} --dart-define=MSP_BUILD_DATE=${{ github.run_started_at }}
@@ -50,12 +53,14 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter gen-l10n
-      - run: dart pub get
-        working-directory: packages/moesketchpad_core
-      - run: dart pub get
-        working-directory: packages/moesketchpad_cli
-      - run: flutter analyze
-      - run: flutter test
+      - run: dart format --output=none --set-exit-if-changed lib test packages
+      - run: (cd packages/moesketchpad_core && dart pub get && dart analyze && dart test)
+      - run: (cd packages/moesketchpad_cli && dart pub get && dart analyze && dart test)
+      - name: Analyze main project
+        shell: pwsh
+        run: |
+          flutter pub cache repair
+          flutter analyze
       - name: Build Windows
         shell: pwsh
         run: |
@@ -136,7 +141,10 @@ jobs:
         working-directory: packages/moesketchpad_core
       - run: dart pub get
         working-directory: packages/moesketchpad_cli
-      - run: flutter analyze
+      - name: Analyze main project
+        run: |
+          dart pub cache repair
+          flutter analyze
       - run: flutter test
       - name: Build macOS
         run: flutter build macos --release --dart-define=MSP_COMMIT=${{ github.sha }} --dart-define=MSP_BUILD_DATE=${{ github.run_started_at }}
