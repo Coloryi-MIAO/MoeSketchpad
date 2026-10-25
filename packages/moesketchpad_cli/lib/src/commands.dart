@@ -1068,7 +1068,7 @@ class ExportCommand extends Command<int> {
       ..addOption(
         'format',
         defaultsTo: 'svg',
-        allowed: ['svg', 'json', 'gif', 'apng', 'mp4'],
+        allowed: ['svg', 'json', 'png', 'gif', 'apng'],
       )
       ..addOption('output')
       ..addOption('animation')
@@ -1076,7 +1076,7 @@ class ExportCommand extends Command<int> {
       ..addOption('width', defaultsTo: '640')
       ..addOption('height', defaultsTo: '360')
       ..addOption('duration-ms', defaultsTo: '80')
-      ..addOption('viewport', help: 'left,top,right,bottom for GIF export')
+      ..addOption('viewport', help: 'left,top,right,bottom for raster export')
       ..addFlag('force', defaultsTo: false);
   }
 
@@ -1087,29 +1087,23 @@ class ExportCommand extends Command<int> {
 
   @override
   String get description =>
-      globals.t('导出 SVG、JSON 或动画 GIF', 'Export SVG, JSON, or animated GIF');
+      globals.t(
+        '导出 SVG、PNG、JSON、GIF 或 APNG',
+        'Export SVG, PNG, JSON, GIF, or APNG',
+      );
 
   @override
   Future<int> run() async {
     if (argResults!.rest.length != 1) {
       throw CliFailure(
         exitUsage,
-        'Usage: moesp export <file.moesp> --format=svg|json|gif '
+        'Usage: moesp export <file.moesp> --format=svg|json|png|gif|apng '
         '--output=<path> [--animation=id] [--frames=24] '
         '[--width=640 --height=360 --duration-ms=80] '
         '[--viewport=left,top,right,bottom]',
       );
     }
     final format = argResults!['format'] as String;
-    if (format == 'apng' || format == 'mp4') {
-      throw CliFailure(
-        exitUsage,
-        globals.t(
-          '$format 导出尚未实现；请使用 SVG、JSON 或 GIF。',
-          '$format export is not implemented. Use SVG, JSON, or GIF.',
-        ),
-      );
-    }
     final document = await loadDocument(globals, path: argResults!.rest.single);
     final outputPath = argResults!['output'] as String?;
     if (outputPath == null) {
@@ -1123,7 +1117,7 @@ class ExportCommand extends Command<int> {
       );
     }
     await output.parent.create(recursive: true);
-    if (format == 'gif') {
+    if (format == 'gif' || format == 'apng') {
       final id = argResults!['animation'] as String?;
       final animations = document.animations;
       final animation = id == null
@@ -1135,7 +1129,7 @@ class ExportCommand extends Command<int> {
         throw CliFailure(
           exitUsage,
           id == null
-              ? 'GIF export needs --animation=<id> when the document has zero or multiple animations.'
+              ? 'Animated export needs --animation=<id> when the document has zero or multiple animations.'
               : 'Unknown animation "$id".',
         );
       }
@@ -1144,14 +1138,34 @@ class ExportCommand extends Command<int> {
       final frames = _boundedInt('frames', min: 2, max: 120);
       final duration = _boundedInt('duration-ms', min: 20, max: 2000);
       final viewport = _viewport(document);
-      final bytes = const CliAnimatedExporter().exportGif(
+      final exporter = const CliAnimatedExporter();
+      final bytes = format == 'gif'
+          ? exporter.exportGif(
+              document: document,
+              animation: animation,
+              viewport: viewport,
+              width: width,
+              height: height,
+              frameCount: frames,
+              frameDurationMs: duration,
+            )
+          : exporter.exportApng(
+              document: document,
+              animation: animation,
+              viewport: viewport,
+              width: width,
+              height: height,
+              frameCount: frames,
+              frameDurationMs: duration,
+            );
+      await output.writeAsBytes(bytes, flush: true);
+    } else if (format == 'png') {
+      final viewport = _viewport(document);
+      final bytes = const CliAnimatedExporter().exportPng(
         document: document,
-        animation: animation,
         viewport: viewport,
-        width: width,
-        height: height,
-        frameCount: frames,
-        frameDurationMs: duration,
+        width: _boundedInt('width', min: 16, max: 2048),
+        height: _boundedInt('height', min: 16, max: 2048),
       );
       await output.writeAsBytes(bytes, flush: true);
     } else if (format == 'json') {

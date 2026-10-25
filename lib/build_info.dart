@@ -5,8 +5,14 @@ library;
 class BuildInfo {
   const BuildInfo._();
 
-  static const String version = '1.0.0';
-  static const String buildNumber = '1';
+  static const String version = String.fromEnvironment(
+    'MSP_VERSION',
+    defaultValue: '1.0.0',
+  );
+  static const String buildNumber = String.fromEnvironment(
+    'MSP_BUILD_NUMBER',
+    defaultValue: '1',
+  );
   static const String buildDate = String.fromEnvironment(
     'MSP_BUILD_DATE',
     defaultValue: '2026-10-24',

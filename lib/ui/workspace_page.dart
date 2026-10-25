@@ -24,6 +24,7 @@ import '../platform/device_document_key_store.dart';
 import '../platform/document_file_name.dart';
 import '../platform/file_service.dart';
 import '../platform/recent_files_store.dart';
+import '../platform/update_service.dart';
 import '../services/animated_apng_exporter.dart';
 import '../services/animated_gif_exporter.dart';
 import '../services/document_command_executor.dart';
@@ -707,8 +708,55 @@ class _WorkspacePageState extends State<WorkspacePage> {
         _showSettings();
       case 'about':
         showAboutMoeSketchpad(context);
+      case 'updates':
+        _checkForUpdates();
       default:
         _showInfo(l10n.notImplemented(action));
+    }
+  }
+
+  Future<void> _checkForUpdates() async {
+    final l10n = AppLocalizations.of(context);
+    if (kIsWeb || !const UpdateService().supported) {
+      _showInfo(l10n.updateUnsupported);
+      return;
+    }
+    try {
+      final update = await const UpdateService().check(
+        currentVersion: BuildInfo.version,
+      );
+      if (!mounted) return;
+      if (update == null) {
+        _showInfo(l10n.updateCurrent);
+        return;
+      }
+      final shouldInstall = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(l10n.updateAvailable),
+          content: Text(l10n.updateVersion(update.version)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.download),
+              label: Text(l10n.updateDownload),
+            ),
+          ],
+        ),
+      );
+      if (shouldInstall != true || !mounted) return;
+      _showInfo(l10n.updateDownloading);
+      final installer = await const UpdateService().downloadInstaller(update);
+      if (!mounted) return;
+      final canClose = await _confirmWindowClose();
+      if (!canClose || !mounted) return;
+      await const UpdateService().launchInstaller(installer);
+    } on Object catch (error) {
+      if (mounted) _showError(l10n.updateFailed('$error'));
     }
   }
 
@@ -1148,6 +1196,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
         _menuItem('toggleDock', l10n.properties, Icons.view_sidebar_outlined),
       ], compact: width < 860),
       _topMenu(l10n.menuHelp, [
+        _menuItem('updates', l10n.checkUpdates, Icons.system_update_alt),
         _menuItem('about', l10n.about, Icons.info_outline),
       ], compact: width < 860),
     ];

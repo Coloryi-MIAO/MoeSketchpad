@@ -42,6 +42,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get menuHelp => '帮助(H)';
 
   @override
+  String get checkUpdates => '检查更新';
+
+  @override
+  String get updateCurrent => '当前已是最新版本。';
+
+  @override
+  String get updateUnsupported => '自动更新仅在 Windows 桌面版提供。';
+
+  @override
+  String get updateAvailable => '发现新版本';
+
+  @override
+  String updateVersion(Object version) {
+    return '版本 $version 已准备就绪。';
+  }
+
+  @override
+  String get updateDownload => '下载并安装';
+
+  @override
+  String get updateDownloading => '正在下载并校验更新…';
+
+  @override
+  String updateFailed(Object error) {
+    return '检查或安装更新失败：$error';
+  }
+
+  @override
   String get newDocument => '新建';
 
   @override

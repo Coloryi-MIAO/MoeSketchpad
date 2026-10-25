@@ -43,12 +43,12 @@
 ## 实现状态与限制
 
 - 桌面端与 Web 最近文件列表及加密自动保存/崩溃恢复已接入；自动保存仅针对本会话已打开或保存且当前会话已提供密码的文档，恢复草稿时需要再次输入密码。
-- 桌面/Web GIF 与 APNG、CLI GIF 动画导出已实现基础几何渲染；CLI APNG 与 MP4 未实现。
+- 桌面/Web 与 CLI 支持基础几何 GIF/APNG 动画导出；CLI 另支持 PNG、SVG 与 JSON。
 - 线-圆、圆-圆外切/内切约束、线段-线段/线段-圆交点吸附、当前视口 SVG 导出已实现。
 - 单独的设备密钥包装格式、系统字体枚举未实现；免密码模式用设备安全存储中的随机密钥参与现有加密，不把固定默认密码写入文件。Web 不支持本地字体枚举。
 - 属性面板命令行使用受限安全命令子集，并非在应用内启动完整 CLI 或 shell。
 - 可选择使用设备生成的随机密钥免输密码；密钥保存在系统安全存储中，文件通常只能在同一设备打开。Web 端安全性受浏览器存储机制约束。
-- 10 万对象 60fps 尚无基准；macOS 打包需在 macOS + Xcode 验证。
+- 不承诺 10 万对象 60fps；macOS 打包需在 macOS + Xcode 验证。
 - AI 连接支持 OpenAI 兼容的 Chat Completions API；浏览器端点需允许 CORS。
   桌面端 API Key 使用系统安全存储，Web 端使用浏览器加密存储；不要在共享/不可信设备保存密钥。
 
@@ -91,9 +91,10 @@ Pop-Location
 ## 打包与文件关联
 
 - Windows 图标已替换；安装器与 `.moesp` 关联：
-  `packaging/windows/moesketchpad.iss`（Inno Setup 6+，现代向导样式），安装时注册
-  `moesp.exe` 的系统 PATH 和文件关联，卸载时清除 PATH 项；开发注册：
-  `packaging/windows/register_moesp.ps1`。EXE 版本资源包含产品/公司/版权/文件名/
+  `installer/` 是 Flutter 安装向导；构建时将 Windows Release 包嵌入安装器，
+  默认安装到当前用户目录，并配置快捷方式、`.moesp` 文件关联与 `moesp` 用户 PATH。
+  安装向导可在再次运行时升级现有安装。开发注册脚本：
+  `packaging/windows/register_moesp.ps1`。EXE 版本资源含产品/公司/版权/文件名/
   版本说明，使用语言中性 Unicode 字符串表。
 - macOS UTI/Document Type：`macos/Runner/Info.plist`；图标资产已替换。
   macOS 构建只能在 macOS runner 上验证。
@@ -101,7 +102,18 @@ Pop-Location
   （`application/x-moesketchpad`）。文件保存由浏览器下载管理器处理，不提供任意路径写入；
   浏览器也无任意文件系统/进程/设备密钥。
 - Web 在窄视口使用紧凑图标和自动换行工具栏，避免右侧按钮只显示一部分。
-- CI：`.github/workflows/build.yml`。
+- CI：`.github/workflows/build.yml` 构建 Windows Flutter 安装器；推送 `v*`
+  版本标签会发布 GitHub Release，附带安装器 ZIP 和 SHA-256 校验文件。
+- Windows 应用通过“帮助 → 检查更新”检查 GitHub 最新 Release；下载后校验
+  SHA-256，再启动 Flutter 安装向导升级。Web/macOS 当前不提供自动更新。
+
+### 构建 Windows Flutter 安装器
+
+CI 会自动生成安装包。若本机构建，先生成 Windows Release 应用，再将完整
+`build/windows/x64/runner/Release` 压缩为 `installer/assets/moesketchpad-windows.zip`，
+然后在 `installer/` 执行 `flutter pub get` 与 `flutter build windows --release`。
+最终安装器是 Flutter Windows 应用目录（exe + `data/` 与运行库），分发时整体 ZIP
+为 `moesketchpad-setup-windows-x64.zip`；不能只分发其中的 exe。
 
 ## 打开、保存与 AI 配置
 

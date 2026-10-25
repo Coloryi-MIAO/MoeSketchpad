@@ -40,7 +40,8 @@ lib/
 packages/moesketchpad_core/   纯 Dart 几何/MSP 内核
 packages/moesketchpad_cli/    moesp 命令与 MCP server
 packages/*/test/              内核与 CLI 测试
-packaging/windows/            Inno Setup / 开发注册脚本
+installer/                    Flutter Windows 安装器
+packaging/windows/            Windows 开发注册脚本
 docs/architecture.md          本文
 COPYING / NOTICE / SOURCE-AVAILABILITY.txt
 ```
@@ -107,7 +108,7 @@ moesp view [--zoom=] [--pan-x=] [--page=] [--landscape] [...]
 moesp validate <file.moesp> [--deep]
 moesp inspect <file.moesp> [--header] [--full]
 moesp convert <input> --to=json|msp --output=<path> [--force]
-moesp export <file.moesp> --format=svg|json|gif --output=<path> [--animation=id]
+moesp export <file.moesp> --format=svg|json|png|gif|apng --output=<path> [--animation=id]
   [--frames=24 --width=640 --height=360 --duration-ms=80]
   [--viewport=left,top,right,bottom]
 moesp mcp-serve [--workspace=<dir>] [--audit-log=<file>]
@@ -149,7 +150,7 @@ stderr。约束命令在求解未收敛时返回 5，且不写文件。
 AI 面向的 CLI 不执行任意 shell，工具参数按白名单结构化校验。
 
 已实现线-圆切线和圆-圆外切/内切约束。Flutter 桌面/Web 支持
-基本几何对象的 GIF/APNG 动画导出，CLI 支持 GIF；CLI APNG、MP4 未实现。导出当前视口的
+基本几何对象的 GIF/APNG 动画导出，CLI 支持 PNG/GIF/APNG；MP4 已从支持范围移除。导出当前视口的
 SVG 已支持。CLI `constraint` 支持 `tangent-line-circle` 与
 `tangent-circle-circle`，后者可加 `--internal`。右侧命令面板只接受受限的安全
 子集：help、calc、point/segment/circle 创建、label、measure 及相切约束；
@@ -230,8 +231,8 @@ MaterialApp(locale, theme)
   不影响工作区显示与几何范围。
 - “几何设定”泊坞窗默认展开且位于右侧属性窗顶部；调整设定会更新文档 view 并
   标记未保存，`.moesp` 重开时恢复。切换标签页会保存当前 view 并加载目标文档 view。
-- CDT 工具箱：未实现的 CDR 工具仍可选择，但点击画布会显示“未接入、不会伪造
-  成功”的提示；长按/右键工具组打开飞出菜单。
+- 工具箱只保留已接入画布/对象属性的绘制与编辑工具；未接入的 CDR 能力不提供
+  可操作入口，避免出现无效按钮。
 - BLoC 所有权：DocumentBloc 是文档与 `isDirty` 唯一来源；CanvasBloc 管视口；
   SelectionBloc 只管 ID；MeasureBloc 是派生结果；AnimationBloc 驱动时间；
   AiBloc 只产生预览；Theme/Locale 不影响几何与序列化。撤销栈按标签页分别保存，
@@ -247,8 +248,8 @@ MaterialApp(locale, theme)
   CLI 支持 `--auto`、上下标/大小写/Greek 简写。
 - 测量：UI/CLI 都通过 `MeasurementEngine` 计算；附着目标 ID，几何变化后重新
   计算；支持单位/精度。测量标签在画布与泊坞窗显示。
-- 导出动图：桌面和 Web UI 可导出 GIF/APNG，CLI 可导出 GIF（基本几何对象
-  栅格化；尺寸/帧数受限）。CLI APNG、MP4 未实现。SVG/JSON 通过 CLI 导出；SVG 当前
+- 导出动图：桌面和 Web UI 可导出 GIF/APNG，CLI 可导出 PNG/GIF/APNG（基本几何对象
+  栅格化；尺寸/帧数受限）。SVG/JSON 通过 CLI 导出；SVG 当前
   支持点/线/圆/弧/多边形/椭圆等基本对象，复杂圆锥/函数的 SVG 仍需完善。
 
 ## 8. AI 默认系统提示词（全文）
@@ -317,8 +318,8 @@ query 或 fragment 的地址，并禁用 HTTP 重定向，避免凭据跟随跳�
 - i18n：Flutter gen-l10n，`app_zh.arb` / `app_en.arb`，所有主要 UI、错误、
   提示词与 CLI 支持 zh/en。MCP/CLI `--lang`。
 - 字体：默认 Microsoft YaHei，平台回退到 Microsoft YaHei UI / PingFang SC /
-  Noto Sans CJK SC / sans-serif。设置中提供策展字体列表；**桌面系统字体枚举
-  尚未实现**，Web 无法枚举本地字体。不会伪称已枚举。
+  Noto Sans CJK SC / sans-serif。设置中只提供策展字体列表；系统字体枚举不属于
+  当前功能范围，Web 也无法枚举本地字体。
 - 萌化主题：仅影响颜色、圆角、阴影/过渡；不影响几何、精度、文件格式。
   专业模式为 CDR 风格中性紧凑配色。
 
@@ -346,16 +347,18 @@ COPYING/NOTICE 全文入口。
   浏览器下载（应用先询问 `.moesp` 文件名），打开使用浏览器文件选择器；
   下载目录与覆盖行为由浏览器管理。
 - Windows：`flutter build windows --release`；`windows/runner/resources/app_icon.ico`
-  已替换；Inno Setup 脚本 `packaging/windows/moesketchpad.iss` 注册
-  `.moesp`、MIME、DefaultIcon、打开命令；`register_moesp.ps1` 供开发用。
+  已替换；Flutter 安装器嵌入应用 ZIP，按当前用户安装并配置 `.moesp`、
+  MIME、DefaultIcon、打开命令与 `moesp` PATH；`register_moesp.ps1` 供开发用。
   EXE 版本资源为语言中性 Unicode，并填充产品名、文件描述、公司、版本、版权和原始文件名。
 - Windows/macOS 初始窗口根据主显示器可用尺寸适配；桌面最小窗口约束已降低，
   窄窗口时自动折叠右侧属性泊坞窗。
 - macOS：`macos/Runner/Info.plist` 已声明 UTI 与 Document Type；AppIcon 资产
   已替换。Windows 上无法构建/验证 macOS，需 macOS runner + Xcode。
--   CI：`.github/workflows/build.yml` 使用 Flutter 3.47.6 构建 Web/Windows/
-  macOS，Windows job 另编译 CLI 并生成 Inno Setup 安装器；macOS 仅在 macOS
-  runner 验证。
+- CI：`.github/workflows/build.yml` 使用 Flutter 3.47.6 构建 Web/Windows/
+  macOS，Windows job 编译 CLI 并生成 Flutter 安装器；`v*` 版本标签会发布 GitHub
+  Release 与 SHA-256 文件；macOS 仅在 macOS runner 验证。
+- Windows 应用可通过“帮助 → 检查更新”下载最新 GitHub Release 安装包；校验
+  SHA-256 后启动 Flutter 安装器升级。Web/macOS 不提供自动更新。
 - 文件关联的启动参数已传入 App；初始密码对话流程已接入桌面文件读取路径。
 
 ## 12. 里程碑、测试计划与限制
@@ -377,17 +380,15 @@ COPYING/NOTICE 全文入口。
 
 后续里程碑（Copilot 任务见 `copanddsh.txt`）：
 
-1. 内核加固：更多 fuzz/性质测试、约束完整性与性能基准。
-2. Canvas：10 万对象、增量索引、笔迹/文本工具与性能剖析。
-3. 文档：系统字体枚举（原生）、设备钥匙串、多窗口。
-4. 导出：完整 SVG、PNG/PDF、CLI APNG、MP4。
-5. AI/MCP：更多供应商协议适配、工具 schema 版本化、审计轮转、MCP 客户端传输。
-6. 发布：签名/公证、安装器 CI、完整 NOTICE 生成、macOS UTI 实机验证。
+1. 内核加固：更多 fuzz/性质测试与约束完整性测试。
+2. Canvas：增量索引与性能剖析；不承诺特定对象数下的帧率。
+3. 文档：多窗口及平台原生能力。
+4. 发布：签名/公证需要发布者提供证书与 Apple 开发者账户。
 
-平台限制（明确）：Web 无本地字体枚举、任意路径文件系统、进程调用；桌面系统
-字体枚举未实现；MP4 与 CLI APNG 导出未实现。免密码保存会使用每安装随机
+平台边界：Web 无本地字体枚举、任意路径文件系统或进程调用；桌面使用策展字体
+候选列表，不声称动态枚举系统字体。MP4、PDF 与设备原生字体枚举不在当前支持
+范围，界面不应暴露这些格式/能力。免密码保存会使用每安装随机
 生成并交由 `flutter_secure_storage` 保存的设备密钥，不使用共享固定默认密码；
 文件依赖原设备密钥，不保证跨设备打开，Web 端保护能力取决于浏览器本地安全存储。
-设备文件关联的 macOS 侧
 当前 AI 直接请求依赖端点兼容 Chat Completions；Web 受 CORS/浏览器安全存储限制；
 不声称 60fps/全部原始需求功能均已实现。

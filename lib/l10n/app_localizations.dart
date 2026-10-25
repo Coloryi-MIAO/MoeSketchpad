@@ -164,6 +164,54 @@ abstract class AppLocalizations {
   /// **'帮助(H)'**
   String get menuHelp;
 
+  /// No description provided for @checkUpdates.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查更新'**
+  String get checkUpdates;
+
+  /// No description provided for @updateCurrent.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前已是最新版本。'**
+  String get updateCurrent;
+
+  /// No description provided for @updateUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动更新仅在 Windows 桌面版提供。'**
+  String get updateUnsupported;
+
+  /// No description provided for @updateAvailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'发现新版本'**
+  String get updateAvailable;
+
+  /// No description provided for @updateVersion.
+  ///
+  /// In zh, this message translates to:
+  /// **'版本 {version} 已准备就绪。'**
+  String updateVersion(Object version);
+
+  /// No description provided for @updateDownload.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载并安装'**
+  String get updateDownload;
+
+  /// No description provided for @updateDownloading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在下载并校验更新…'**
+  String get updateDownloading;
+
+  /// No description provided for @updateFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查或安装更新失败：{error}'**
+  String updateFailed(Object error);
+
   /// No description provided for @newDocument.
   ///
   /// In zh, this message translates to:

@@ -115,6 +115,86 @@ void main() {
     expect(decoded.height, 48);
   });
 
+  test('CLI exports animated PNG and static PNG', () async {
+    final directory = await Directory.systemTemp.createTemp('msp-png-');
+    addTearDown(() => directory.delete(recursive: true));
+    final documentPath =
+        '${directory.path}${Platform.pathSeparator}motion.moesp';
+    final animatedPath = '${directory.path}${Platform.pathSeparator}motion.png';
+    final staticPath = '${directory.path}${Platform.pathSeparator}still.png';
+    final animation = AnimationSpec(
+      id: 'animation-1',
+      targetId: 'point-1',
+      pathObjectId: 'segment-1',
+      pathKind: 'segment',
+    );
+    final document = GeometryDocument(
+      objects: [
+        GeometryObject(
+          id: 'point-1',
+          kind: GeometryKind.point,
+          points: const [Point2(0, 0)],
+        ),
+        GeometryObject(
+          id: 'segment-1',
+          kind: GeometryKind.segment,
+          points: const [Point2(-2, 0), Point2(2, 0)],
+        ),
+      ],
+      animations: [animation],
+    );
+    await File(
+      documentPath,
+    ).writeAsBytes(await MspCodec().encode(document, password: 'test-secret'));
+    final animated = await Process.run(
+      Platform.resolvedExecutable,
+      [
+        'run',
+        'bin/msp.dart',
+        'export',
+        documentPath,
+        '--format=apng',
+        '--animation=animation-1',
+        '--frames=4',
+        '--width=64',
+        '--height=48',
+        '--output=$animatedPath',
+        '--json',
+      ],
+      workingDirectory: Directory.current.path,
+      environment: {...Platform.environment, 'MSP_PASSWORD': 'test-secret'},
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
+    );
+    expect(animated.exitCode, 0, reason: animated.stderr.toString());
+    final apngBytes = await File(animatedPath).readAsBytes();
+    expect(String.fromCharCodes(apngBytes.sublist(37, 41)), 'acTL');
+    expect(img.decodePng(apngBytes), isNotNull);
+
+    final still = await Process.run(
+      Platform.resolvedExecutable,
+      [
+        'run',
+        'bin/msp.dart',
+        'export',
+        documentPath,
+        '--format=png',
+        '--width=64',
+        '--height=48',
+        '--output=$staticPath',
+        '--json',
+      ],
+      workingDirectory: Directory.current.path,
+      environment: {...Platform.environment, 'MSP_PASSWORD': 'test-secret'},
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
+    );
+    expect(still.exitCode, 0, reason: still.stderr.toString());
+    final png = img.decodePng(await File(staticPath).readAsBytes());
+    expect(png?.width, 64);
+    expect(png?.height, 48);
+  });
+
   test('unsolvable triangle exits 5 and malformed usage exits 2', () async {
     final unsolvable = await msp([
       'create',

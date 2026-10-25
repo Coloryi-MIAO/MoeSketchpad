@@ -42,6 +42,35 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuHelp => 'Help (H)';
 
   @override
+  String get checkUpdates => 'Check for updates';
+
+  @override
+  String get updateCurrent => 'You are using the latest version.';
+
+  @override
+  String get updateUnsupported =>
+      'Automatic updates are available in the Windows desktop app.';
+
+  @override
+  String get updateAvailable => 'A new version is available';
+
+  @override
+  String updateVersion(Object version) {
+    return 'Version $version is ready to download.';
+  }
+
+  @override
+  String get updateDownload => 'Download and install';
+
+  @override
+  String get updateDownloading => 'Downloading and verifying the update…';
+
+  @override
+  String updateFailed(Object error) {
+    return 'Could not check or install the update: $error';
+  }
+
+  @override
   String get newDocument => 'New';
 
   @override
