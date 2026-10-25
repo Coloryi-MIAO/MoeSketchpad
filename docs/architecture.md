@@ -147,7 +147,7 @@ stderr。约束命令在求解未收敛时返回 5，且不写文件。
 AI 面向的 CLI 不执行任意 shell，工具参数按白名单结构化校验。
 
 已实现线-圆切线和圆-圆外切/内切约束。Flutter 桌面/Web 支持
-基本几何对象的 GIF 动画导出；CLI 动图、APNG、MP4 未实现。导出当前视口的
+基本几何对象的 GIF/APNG 动画导出；CLI 动图、MP4 未实现。导出当前视口的
 SVG 已支持。CLI `constraint` 支持 `tangent-line-circle` 与
 `tangent-circle-circle`，后者可加 `--internal`。右侧命令面板只接受受限的安全
 子集：help、calc、point/segment/circle 创建、label、measure 及相切约束；
@@ -378,12 +378,12 @@ COPYING/NOTICE 全文入口。
 1. 内核加固：更多 fuzz/性质测试、约束完整性与性能基准。
 2. Canvas：10 万对象、增量索引、笔迹/文本工具与性能剖析。
 3. 文档：系统字体枚举（原生）、设备钥匙串、多窗口。
-4. 导出：完整 SVG、PNG/PDF、CLI GIF/APNG/MP4。
+4. 导出：完整 SVG、PNG/PDF、CLI GIF/APNG、MP4。
 5. AI/MCP：更多供应商协议适配、工具 schema 版本化、审计轮转、MCP 客户端传输。
 6. 发布：签名/公证、安装器 CI、完整 NOTICE 生成、macOS UTI 实机验证。
 
 平台限制（明确）：Web 无本地字体枚举、任意路径文件系统、进程调用；桌面系统
-字体枚举未实现；APNG/MP4 与 CLI 动图导出未实现。免密码保存会使用每安装随机
+字体枚举未实现；MP4 与 CLI 动图导出未实现。免密码保存会使用每安装随机
 生成并交由 `flutter_secure_storage` 保存的设备密钥，不使用共享固定默认密码；
 文件依赖原设备密钥，不保证跨设备打开，Web 端保护能力取决于浏览器本地安全存储。
 设备文件关联的 macOS 侧

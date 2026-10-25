@@ -24,6 +24,7 @@ import '../platform/device_document_key_store.dart';
 import '../platform/document_file_name.dart';
 import '../platform/file_service.dart';
 import '../platform/recent_files_store.dart';
+import '../services/animated_apng_exporter.dart';
 import '../services/animated_gif_exporter.dart';
 import '../services/document_command_executor.dart';
 import 'canvas/sketchpad_canvas.dart';
@@ -694,6 +695,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
         _exportSvg();
       case 'exportGif':
         _exportAnimationGif();
+      case 'exportApng':
+        _exportAnimationApng();
       case 'closeTab':
         _closeTab(context.read<DocumentBloc>().state.activeIndex);
       case 'selectTool':
@@ -789,12 +792,21 @@ class _WorkspacePageState extends State<WorkspacePage> {
   }
 
   Future<void> _exportAnimationGif() async {
+    await _exportAnimation(apng: false);
+  }
+
+  Future<void> _exportAnimationApng() async {
+    await _exportAnimation(apng: true);
+  }
+
+  Future<void> _exportAnimation({required bool apng}) async {
     final document = context.read<DocumentBloc>().state.active.document;
+    final format = apng ? 'APNG' : 'GIF';
     if (document.animations.isEmpty) {
       _showInfo(
         Localizations.localeOf(context).languageCode == 'zh'
-            ? '请先为文档添加动点动画。'
-            : 'Add a point animation to this document first.',
+            ? '请先为文档添加动点动画，才能导出 $format。'
+            : 'Add a point animation before exporting $format.',
       );
       return;
     }
@@ -837,25 +849,34 @@ class _WorkspacePageState extends State<WorkspacePage> {
       if (viewport == null) {
         throw StateError('Canvas viewport is not ready for export.');
       }
-      final bytes = const AnimatedGifExporter().export(
-        document: document,
-        animation: animation,
-        viewport: viewport,
-      );
+      final bytes = apng
+          ? const AnimatedApngExporter().export(
+              document: document,
+              animation: animation,
+              viewport: viewport,
+            )
+          : const AnimatedGifExporter().export(
+              document: document,
+              animation: animation,
+              viewport: viewport,
+            );
       final tab = context.read<DocumentBloc>().state.active;
       final baseName = tab.path == null
           ? AppLocalizations.of(context).untitled(tab.untitledIndex)
           : p.basenameWithoutExtension(tab.path!);
+      final extension = apng ? 'png' : 'gif';
       await FileService.saveExport(
-        suggestedName: '$baseName.gif',
+        suggestedName: '$baseName.$extension',
         bytes: Uint8List.fromList(bytes),
-        extension: 'gif',
-        mimeType: 'image/gif',
+        extension: extension,
+        mimeType: apng ? 'image/apng' : 'image/gif',
       );
     } on Object catch (error) {
       if (mounted) {
         _showError(
-          language == 'zh' ? 'GIF 导出失败：$error' : 'GIF export failed: $error',
+          language == 'zh'
+              ? '$format 导出失败：$error'
+              : '$format export failed: $error',
         );
       }
     }
@@ -1083,6 +1104,13 @@ class _WorkspacePageState extends State<WorkspacePage> {
           Localizations.localeOf(context).languageCode == 'zh'
               ? '导出动画 GIF'
               : 'Export animation GIF',
+          Icons.animation,
+        ),
+        _menuItem(
+          'exportApng',
+          Localizations.localeOf(context).languageCode == 'zh'
+              ? '导出动画 APNG'
+              : 'Export animation APNG',
           Icons.animation,
         ),
         _menuItem('closeTab', l10n.closeTab, Icons.close),

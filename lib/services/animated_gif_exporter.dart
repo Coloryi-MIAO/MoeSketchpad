@@ -17,6 +17,36 @@ class AnimatedGifExporter {
     int frameCount = 36,
     int frameDurationMs = 80,
   }) {
+    final frames = renderFrames(
+      document: document,
+      animation: animation,
+      viewport: viewport,
+      width: width,
+      height: height,
+      frameCount: frameCount,
+      frameDurationMs: frameDurationMs,
+    );
+    final encoder = img.GifEncoder(repeat: animation.loop ? 0 : -1);
+    final frameMs = math.max(10, ((frameDurationMs + 5) ~/ 10) * 10);
+    for (final image in frames) {
+      encoder.addFrame(image, duration: frameMs ~/ 10);
+    }
+    final bytes = encoder.finish();
+    if (bytes == null || bytes.isEmpty) {
+      throw StateError('GIF encoder returned no output.');
+    }
+    return bytes;
+  }
+
+  List<img.Image> renderFrames({
+    required GeometryDocument document,
+    required AnimationSpec animation,
+    required Bounds2 viewport,
+    int width = 960,
+    int height = 540,
+    int frameCount = 36,
+    int frameDurationMs = 80,
+  }) {
     if (width < 16 ||
         height < 16 ||
         width > 2048 ||
@@ -32,14 +62,15 @@ class AnimatedGifExporter {
         !viewport.bottom.isFinite ||
         viewport.width <= 0 ||
         viewport.height <= 0) {
-      throw ArgumentError('GIF export dimensions or viewport are invalid.');
+      throw ArgumentError(
+        'Animation export dimensions or viewport are invalid.',
+      );
     }
     if (!document.animations.any((item) => item.id == animation.id)) {
       throw ArgumentError.value(animation.id, 'animation', 'Not in document.');
     }
 
-    final encoder = img.GifEncoder(repeat: animation.loop ? 0 : -1);
-    final frameMs = math.max(10, ((frameDurationMs + 5) ~/ 10) * 10);
+    final frames = <img.Image>[];
     for (var frame = 0; frame < frameCount; frame++) {
       final elapsed = frame * frameDurationMs / 1000;
       final animated = const AnimationEvaluator().targetAt(
@@ -57,13 +88,9 @@ class AnimatedGifExporter {
         if (!object.visible) continue;
         _drawObject(image, object, viewport);
       }
-      encoder.addFrame(image, duration: frameMs ~/ 10);
+      frames.add(image);
     }
-    final bytes = encoder.finish();
-    if (bytes == null || bytes.isEmpty) {
-      throw StateError('GIF encoder returned no output.');
-    }
-    return bytes;
+    return frames;
   }
 
   void _drawObject(img.Image image, GeometryObject object, Bounds2 viewport) {
