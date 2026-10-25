@@ -21,10 +21,10 @@ class SketchpadCanvas extends StatefulWidget {
   const SketchpadCanvas({super.key});
 
   @override
-  State<SketchpadCanvas> createState() => _SketchpadCanvasState();
+  SketchpadCanvasState createState() => SketchpadCanvasState();
 }
 
-class _SketchpadCanvasState extends State<SketchpadCanvas> {
+class SketchpadCanvasState extends State<SketchpadCanvas> {
   final GlobalKey _canvasKey = GlobalKey();
   final FocusNode _focusNode = FocusNode(debugLabel: 'canvas');
   final List<Point2> _draftPoints = <Point2>[];
@@ -41,6 +41,22 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
   Point2? _lastSnap;
   SpatialIndex? _index;
   GeometryDocument? _indexedDocument;
+
+  Bounds2? get viewportWorldBounds {
+    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    final canvas = context.read<CanvasBloc>().state;
+    final first = canvas.screenToWorld(Offset.zero);
+    final second = canvas.screenToWorld(
+      Offset(box.size.width, box.size.height),
+    );
+    return Bounds2(
+      math.min(first.x, second.x),
+      math.min(first.y, second.y),
+      math.max(first.x, second.x),
+      math.max(first.y, second.y),
+    );
+  }
 
   @override
   void dispose() {
@@ -103,6 +119,50 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
             }
           default:
             break;
+        }
+      }
+      final tolerancePolicy = context
+          .read<CanvasBloc>()
+          .state
+          .geometryTolerance;
+      for (var firstIndex = 0; firstIndex < objects.length; firstIndex++) {
+        final first = objects[firstIndex];
+        for (
+          var secondIndex = firstIndex + 1;
+          secondIndex < objects.length;
+          secondIndex++
+        ) {
+          final second = objects[secondIndex];
+          final intersections = switch ((first.kind, second.kind)) {
+            (GeometryKind.segment, GeometryKind.segment) => intersectLines(
+              first.points[0],
+              first.points[1],
+              second.points[0],
+              second.points[1],
+              segments: true,
+              tolerance: tolerancePolicy,
+            ),
+            (GeometryKind.segment, GeometryKind.circle) => intersectLineCircle(
+              first.points[0],
+              first.points[1],
+              second.points[0],
+              second.points[0].distanceTo(second.points[1]),
+              segment: true,
+              tolerance: tolerancePolicy,
+            ),
+            (GeometryKind.circle, GeometryKind.segment) => intersectLineCircle(
+              second.points[0],
+              second.points[1],
+              first.points[0],
+              first.points[0].distanceTo(first.points[1]),
+              segment: true,
+              tolerance: tolerancePolicy,
+            ),
+            _ => const IntersectionResult.none(),
+          };
+          for (final point in intersections.points) {
+            consider(point);
+          }
         }
       }
     }
@@ -824,6 +884,25 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
               final document = _dragDocument ?? documentState.active.document;
               final index = _spatialIndex(document);
               final selection = context.watch<SelectionBloc>().state.ids;
+              final selectedSegment = selection.length == 1
+                  ? document.objectById(selection.single)
+                  : null;
+              String? segmentLength;
+              if (selectedSegment?.kind == GeometryKind.segment) {
+                final measurement = Measurement(
+                  id: '_selection-length',
+                  type: MeasurementType.length,
+                  targetIds: [selectedSegment!.id],
+                  unit: MeasureUnit.parse(canvasState.unit),
+                );
+                try {
+                  segmentLength = const MeasurementEngine()
+                      .measure(measurement, document)
+                      .display;
+                } on FormatException {
+                  segmentLength = null;
+                }
+              }
               final measureState = context.watch<MeasureBloc>().state;
               final animationState = context.watch<AnimationBloc>().state;
               final animation = _activeAnimation(document, animationState);
@@ -1042,6 +1121,63 @@ class _SketchpadCanvasState extends State<SketchpadCanvas> {
                                                             BorderRadius.circular(
                                                               9,
                                                             ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              if (segmentLength != null)
+                                                Positioned(
+                                                  left: 10,
+                                                  top: 10,
+                                                  child: IgnorePointer(
+                                                    child: DecoratedBox(
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.white
+                                                            .withValues(
+                                                              alpha: 0.94,
+                                                            ),
+                                                        border: Border.all(
+                                                          color: const Color(
+                                                            0xff6e879b,
+                                                          ),
+                                                        ),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              4,
+                                                            ),
+                                                        boxShadow: const [
+                                                          BoxShadow(
+                                                            color: Color(
+                                                              0x22000000,
+                                                            ),
+                                                            blurRadius: 3,
+                                                            offset: Offset(
+                                                              0,
+                                                              1,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      child: Padding(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 5,
+                                                            ),
+                                                        child: Text(
+                                                          '${AppLocalizations.of(context).measureLength}: '
+                                                          '$segmentLength',
+                                                          style:
+                                                              const TextStyle(
+                                                                fontSize: 11,
+                                                                color: Color(
+                                                                  0xff203548,
+                                                                ),
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
+                                                        ),
                                                       ),
                                                     ),
                                                   ),

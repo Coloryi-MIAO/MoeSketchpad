@@ -74,7 +74,7 @@ class ConstraintSolver {
           ...[point.value.x, point.value.y],
         ],
     ];
-    final evaluator = _ResidualEvaluator(document, points);
+    final evaluator = _ResidualEvaluator(document, points, tolerance);
     var lambda = 1e-3;
     var residual = evaluator.residualNorm(positions);
     var iterations = 0;
@@ -155,7 +155,7 @@ class _PointRef {
 }
 
 class _ResidualEvaluator {
-  _ResidualEvaluator(this.document, this.variables)
+  _ResidualEvaluator(this.document, this.variables, this.tolerance)
     : _index = {
         for (var i = 0; i < variables.length; i++)
           _key(variables[i].objectIndex, variables[i].pointIndex): i,
@@ -163,6 +163,7 @@ class _ResidualEvaluator {
 
   final GeometryDocument document;
   final List<_PointRef> variables;
+  final GeometryTolerance tolerance;
   final Map<String, int> _index;
 
   static String _key(int objectIndex, int pointIndex) =>
@@ -263,8 +264,63 @@ class _ResidualEvaluator {
           )).clamp(-1.0, 1.0);
           result.add(math.acos(cosine) - constraint.value! * math.pi / 180);
         case ConstraintType.tangent:
-          throw const FormatException(
-            'Tangent constraints are reserved and not yet solvable.',
+        case ConstraintType.tangentLineCircle:
+          _require(targets.length == 2, constraint);
+          final firstIndex = document.objects.indexWhere(
+            (object) => object.id == targets[0],
+          );
+          final secondIndex = document.objects.indexWhere(
+            (object) => object.id == targets[1],
+          );
+          if (firstIndex < 0 || secondIndex < 0) {
+            throw FormatException(
+              'Constraint "${constraint.id}" references an unknown object.',
+            );
+          }
+          final first = document.objects[firstIndex];
+          final second = document.objects[secondIndex];
+          final lineIndex = first.kind == GeometryKind.line
+              ? firstIndex
+              : second.kind == GeometryKind.line
+              ? secondIndex
+              : -1;
+          final circleIndex = first.kind == GeometryKind.circle
+              ? firstIndex
+              : second.kind == GeometryKind.circle
+              ? secondIndex
+              : -1;
+          _require(lineIndex >= 0 && circleIndex >= 0, constraint);
+          final line = document.objects[lineIndex];
+          final linePoints = _objectPoints(line.id, positions);
+          final direction = linePoints[1] - linePoints[0];
+          _require(direction.length > tolerance.absolute, constraint);
+          final circle = _objectPoints(
+            document.objects[circleIndex].id,
+            positions,
+          );
+          final radius = circle[0].distanceTo(circle[1]);
+          final distance =
+              direction.cross(circle[0] - linePoints[0]).abs() /
+              direction.length;
+          result.add(distance - radius);
+        case ConstraintType.tangentCircleCircle:
+          _require(targets.length == 2, constraint);
+          final circles = [
+            for (final id in targets)
+              document.objects.where((object) => object.id == id).firstOrNull,
+          ];
+          _require(
+            circles.every(
+              (object) => object != null && object.kind == GeometryKind.circle,
+            ),
+            constraint,
+          );
+          final first = _objectPoints(targets[0], positions);
+          final second = _objectPoints(targets[1], positions);
+          final firstRadius = first[0].distanceTo(first[1]);
+          final secondRadius = second[0].distanceTo(second[1]);
+          result.add(
+            first[0].distanceTo(second[0]) - firstRadius - secondRadius,
           );
       }
     }

@@ -8,6 +8,12 @@ class PickedFile {
   final String? path;
 }
 
+class RecoveryDraft {
+  const RecoveryDraft({required this.key, required this.bytes});
+  final String key;
+  final Uint8List bytes;
+}
+
 class FileService {
   const FileService._();
 
@@ -32,4 +38,12 @@ class FileService {
   }
 
   static Future<PickedFile?> readFromPath(String path) async => null;
+
+  static Future<void> writeRecovery(String key, Uint8List bytes) async {
+    throw UnsupportedError('Crash recovery storage is unavailable.');
+  }
+
+  static Future<List<RecoveryDraft>> listRecovery() async => const [];
+
+  static Future<void> deleteRecovery(String key) async {}
 }

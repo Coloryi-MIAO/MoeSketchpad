@@ -3,13 +3,17 @@
 // path. Local font enumeration and process invocation are unavailable.
 // ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:async';
+import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:typed_data';
 
-import 'file_service_stub.dart' show PickedFile;
+import 'file_service_stub.dart' show PickedFile, RecoveryDraft;
 
 class FileService {
   const FileService._();
+
+  static const _recoveryPrefix = 'moesketchpad.recovery.';
+  static const _maxRecoveryBytes = 8 * 1024 * 1024;
 
   static bool get supportsNativePaths => false;
 
@@ -100,6 +104,40 @@ class FileService {
     anchor.remove();
     Timer(const Duration(seconds: 30), () => html.Url.revokeObjectUrl(url));
     return suggestedName;
+  }
+
+  static Future<void> writeRecovery(String key, Uint8List bytes) async {
+    if (!RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(key)) {
+      throw ArgumentError.value(key, 'key', 'Invalid recovery identifier.');
+    }
+    if (bytes.length > _maxRecoveryBytes) {
+      throw StateError('Web recovery draft exceeds the 8 MiB limit.');
+    }
+    html.window.localStorage['$_recoveryPrefix$key'] = base64Encode(bytes);
+  }
+
+  static Future<List<RecoveryDraft>> listRecovery() async {
+    final drafts = <RecoveryDraft>[];
+    for (final key in html.window.localStorage.keys.toList()) {
+      if (!key.startsWith(_recoveryPrefix)) continue;
+      final id = key.substring(_recoveryPrefix.length);
+      if (!RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(id)) continue;
+      final encoded = html.window.localStorage[key];
+      if (encoded == null || encoded.length > _maxRecoveryBytes * 2) continue;
+      try {
+        drafts.add(RecoveryDraft(key: id, bytes: base64Decode(encoded)));
+      } on FormatException {
+        html.window.localStorage.remove(key);
+      }
+    }
+    return drafts;
+  }
+
+  static Future<void> deleteRecovery(String key) async {
+    if (!RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(key)) {
+      throw ArgumentError.value(key, 'key', 'Invalid recovery identifier.');
+    }
+    html.window.localStorage.remove('$_recoveryPrefix$key');
   }
 
   static Future<PickedFile?> readFromPath(String path) async => null;

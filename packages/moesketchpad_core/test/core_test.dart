@@ -180,6 +180,95 @@ void main() {
       );
       expect(index.length, 5000);
     });
+
+    test('circle bounds cover the full circumference', () {
+      final circle = GeometryObject(
+        id: 'circle',
+        kind: GeometryKind.circle,
+        points: const [Point2(10, 10), Point2(13, 10)],
+      );
+      expect(circle.bounds?.left, 7);
+      expect(circle.bounds?.top, 7);
+      expect(circle.bounds?.right, 13);
+      expect(circle.bounds?.bottom, 13);
+      expect(
+        SpatialIndex([circle]).query(const Bounds2(12, 9, 14, 11)),
+        contains(circle),
+      );
+    });
+  });
+
+  group('tangent constraints', () {
+    test('solves a fixed line and movable circle tangency', () {
+      final document = GeometryDocument(
+        objects: const [
+          GeometryObject(
+            id: 'line',
+            kind: GeometryKind.line,
+            points: [Point2(0, 0), Point2(1, 0)],
+            params: {'fixed': true},
+          ),
+          GeometryObject(
+            id: 'circle',
+            kind: GeometryKind.circle,
+            points: [Point2(3, 5), Point2(4, 5)],
+          ),
+        ],
+        constraints: const [
+          Constraint(
+            id: 'line-tangent',
+            type: ConstraintType.tangentLineCircle,
+            targetIds: ['line', 'circle'],
+          ),
+        ],
+      );
+
+      final result = const ConstraintSolver().solve(document);
+      final circle = result.document.objectById('circle')!;
+      expect(result.converged, isTrue);
+      expect(
+        (circle.points.first.y -
+                circle.points.first.distanceTo(circle.points[1]))
+            .abs(),
+        lessThan(1e-7),
+      );
+    });
+
+    test('solves external circle-circle tangency', () {
+      final document = GeometryDocument(
+        objects: const [
+          GeometryObject(
+            id: 'circle-a',
+            kind: GeometryKind.circle,
+            points: [Point2(0, 0), Point2(1, 0)],
+            params: {'fixed': true},
+          ),
+          GeometryObject(
+            id: 'circle-b',
+            kind: GeometryKind.circle,
+            points: [Point2(4, 0), Point2(5, 0)],
+          ),
+        ],
+        constraints: const [
+          Constraint(
+            id: 'circles-tangent',
+            type: ConstraintType.tangentCircleCircle,
+            targetIds: ['circle-a', 'circle-b'],
+          ),
+        ],
+      );
+
+      final result = const ConstraintSolver().solve(document);
+      final first = result.document.objectById('circle-a')!;
+      final second = result.document.objectById('circle-b')!;
+      final radiusA = first.points.first.distanceTo(first.points[1]);
+      final radiusB = second.points.first.distanceTo(second.points[1]);
+      expect(result.converged, isTrue);
+      expect(
+        second.points.first.distanceTo(first.points.first),
+        closeTo(radiusA + radiusB, 1e-7),
+      );
+    });
   });
 
   group('triangle shorthand', () {
@@ -296,6 +385,32 @@ void main() {
     final svg = SvgExporter().export(document);
     expect(svg, contains('&lt;script&gt;&amp;'));
     expect(svg, isNot(contains('<script>')));
+  });
+
+  test('SVG exporter clips to the requested world viewport', () {
+    final document = GeometryDocument(
+      objects: const [
+        GeometryObject(
+          id: 'inside',
+          kind: GeometryKind.point,
+          points: [Point2(5, 5)],
+          label: 'inside',
+        ),
+        GeometryObject(
+          id: 'outside',
+          kind: GeometryKind.point,
+          points: [Point2(50, 50)],
+          label: 'outside',
+        ),
+      ],
+    );
+    final svg = SvgExporter().exportViewport(
+      document,
+      const Bounds2(0, 0, 10, 10),
+    );
+    expect(svg, contains('viewportClip'));
+    expect(svg, contains('inside'));
+    expect(svg, isNot(contains('outside')));
   });
 
   test('measurements support units and geometry', () {

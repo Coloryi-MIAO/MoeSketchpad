@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-/// The complete `msp` command set.
+/// The `moesp` command set (`msp` remains a compatibility executable).
 library;
 
 import 'dart:convert';
@@ -17,7 +17,7 @@ import 'primitives.dart';
 class MspCommandRunner extends CommandRunner<int> {
   MspCommandRunner(this.globals)
     : super(
-        'msp',
+        'moesp',
         globals.t('萌板动态几何文档工具', 'MoeSketchpad dynamic geometry document tool'),
       ) {
     addCommand(CreateCommand(globals));
@@ -105,8 +105,8 @@ class CreateCommand extends Command<int> {
       throw CliFailure(
         exitUsage,
         globals.t(
-          '用法：msp create <primitive> [options] [--file doc.moesp]',
-          'Usage: msp create <primitive> [options] [--file doc.moesp]',
+          '用法：moesp create <primitive> [options] [--file doc.moesp]',
+          'Usage: moesp create <primitive> [options] [--file doc.moesp]',
         ),
       );
     }
@@ -180,8 +180,8 @@ class ConstraintCommand extends Command<int> {
       throw CliFailure(
         exitUsage,
         globals.t(
-          '用法：msp constraint <type> <target...> [--value=n] --file doc.moesp',
-          'Usage: msp constraint <type> <target...> [--value=n] --file doc.moesp',
+          '用法：moesp constraint <type> <target...> [--value=n] --file doc.moesp',
+          'Usage: moesp constraint <type> <target...> [--value=n] --file doc.moesp',
         ),
       );
     }
@@ -320,7 +320,7 @@ class LabelCommand extends Command<int> {
     if (!auto && target == null) {
       throw CliFailure(
         exitUsage,
-        'Usage: msp label <target> --text=A --file doc.moesp',
+        'Usage: moesp label <target> --text=A --file doc.moesp',
       );
     }
     var font = 14.0;
@@ -567,7 +567,7 @@ class AnimateCommand extends Command<int> {
     if (argResults!.rest.length != 1) {
       throw CliFailure(
         exitUsage,
-        'Usage: msp animate <point> --path=<obj> --t=0..1 --speed=1 '
+        'Usage: moesp animate <point> --path=<obj> --t=0..1 --speed=1 '
         '--loop|--pingpong --trail=20 --file doc.moesp',
       );
     }
@@ -669,7 +669,7 @@ class CalcCommand extends Command<int> {
   Future<int> run() async {
     final expression = argResults!.rest.join(' ').trim();
     if (expression.isEmpty) {
-      throw CliFailure(exitUsage, 'Usage: msp calc <expression>');
+      throw CliFailure(exitUsage, 'Usage: moesp calc <expression>');
     }
     final variables = <String, double>{};
     for (final variable in argResults!['var'] as List<String>) {
@@ -805,7 +805,10 @@ class ValidateCommand extends Command<int> {
     final paths = [...argResults!.rest];
     final path = paths.isEmpty ? globals.file : paths.first;
     if (path == null) {
-      throw CliFailure(exitUsage, 'Usage: msp validate <file.moesp> [--deep]');
+      throw CliFailure(
+        exitUsage,
+        'Usage: moesp validate <file.moesp> [--deep]',
+      );
     }
     final file = File(path);
     if (!await file.exists()) {
@@ -876,7 +879,10 @@ class InspectCommand extends Command<int> {
         ? argResults!.rest.first
         : globals.file;
     if (path == null) {
-      throw CliFailure(exitUsage, 'Usage: msp inspect <file.moesp> [--header]');
+      throw CliFailure(
+        exitUsage,
+        'Usage: moesp inspect <file.moesp> [--header]',
+      );
     }
     final bytes = await File(path).readAsBytes();
     try {
@@ -960,7 +966,7 @@ class ConvertCommand extends Command<int> {
     if (argResults!.rest.length != 1) {
       throw CliFailure(
         exitUsage,
-        'Usage: msp convert <input> --to=json|msp --output=<path>',
+        'Usage: moesp convert <input> --to=json|msp --output=<path>',
       );
     }
     final input = File(argResults!.rest.single);
@@ -1071,17 +1077,14 @@ class ExportCommand extends Command<int> {
   String get name => 'export';
 
   @override
-  String get description => globals.t(
-    '导出 SVG/JSON（动图编码尚未接入）',
-    'Export SVG/JSON (animation encoders not wired)',
-  );
+  String get description => globals.t('导出 SVG 或 JSON', 'Export SVG or JSON');
 
   @override
   Future<int> run() async {
     if (argResults!.rest.length != 1) {
       throw CliFailure(
         exitUsage,
-        'Usage: msp export <file.moesp> --format=svg|json --output=<path>',
+        'Usage: moesp export <file.moesp> --format=svg|json --output=<path>',
       );
     }
     final format = argResults!['format'] as String;

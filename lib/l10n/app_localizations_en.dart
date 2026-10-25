@@ -550,7 +550,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fitView => 'Fit to window';
 
   @override
-  String get exportPage => 'Export page SVG';
+  String get exportPage => 'Export viewport SVG';
 
   @override
   String get visibility => 'Visibility';

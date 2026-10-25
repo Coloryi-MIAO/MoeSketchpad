@@ -164,7 +164,7 @@
   "fontCuratedNotice": "A curated font list is used; native system-font enumeration requires an optional plugin.",
   "renderLayers": "Render layers",
   "fitView": "Fit to window",
-  "exportPage": "Export page SVG",
+  "exportPage": "Export viewport SVG",
   "visibility": "Visibility",
   "notImplemented": "{feature} is not implemented or wired in this build.",
   "previewObjects": "Preview: {count} object(s) will be added",

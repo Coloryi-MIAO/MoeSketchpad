@@ -16,7 +16,7 @@ void main() {
   test('help succeeds', () async {
     final result = await msp(['help', '--lang', 'en']);
     expect(result.exitCode, 0);
-    expect(result.stdout, contains('Usage: msp'));
+    expect(result.stdout, contains('Usage: moesp'));
   });
 
   test('calc emits JSON and rejects invalid input', () async {

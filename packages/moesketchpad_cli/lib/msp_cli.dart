@@ -40,7 +40,9 @@ class MspCli {
             }),
           );
         } else {
-          stdout.writeln('msp 0.1.0 (MSP format v${MspCodec.currentVersion})');
+          stdout.writeln(
+            'moesp 0.1.0 (MSP format v${MspCodec.currentVersion})',
+          );
         }
         return exitSuccess;
       }
@@ -153,8 +155,8 @@ class MspCli {
     if (command == null) {
       stderr.writeln(
         globals.t(
-          '未知命令 "${args.first}"。运行 msp help 查看命令列表。',
-          'Unknown command "${args.first}". Run msp help.',
+          '未知命令 "${args.first}"。运行 moesp help 查看命令列表。',
+          'Unknown command "${args.first}". Run moesp help.',
         ),
       );
       return exitUsage;

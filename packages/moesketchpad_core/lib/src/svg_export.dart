@@ -59,6 +59,58 @@ $body</svg>
 ''';
   }
 
+  /// Exports the world-coordinate rectangle currently visible in a viewport.
+  ///
+  /// The output has a transparent background and clips all bounded geometry
+  /// to [viewport]. Lines and other unbounded objects are sampled/clipped
+  /// against the same bounds.
+  String exportViewport(
+    GeometryDocument document,
+    Bounds2 viewport, {
+    double? outputWidth,
+    double? outputHeight,
+  }) {
+    if (!viewport.isValid || viewport.width <= 0 || viewport.height <= 0) {
+      throw ArgumentError.value(
+        viewport,
+        'viewport',
+        'Finite bounds required.',
+      );
+    }
+    final body = StringBuffer()..writeln('<g clip-path="url(#viewportClip)">');
+    final ordered = [...document.objects]..sort((a, b) => a.id.compareTo(b.id));
+    for (final object in ordered) {
+      if (!object.visible) continue;
+      final bounds = object.bounds;
+      if (bounds != null && !bounds.intersects(viewport)) continue;
+      body.write(_objectSvg(object, document, viewport));
+    }
+    for (final measurement in document.measurements) {
+      if (!measurement.visible || measurement.targetIds.isEmpty) continue;
+      final target = document.objectById(measurement.targetIds.first);
+      if (target == null || target.points.isEmpty) continue;
+      final anchor = target.points.first;
+      if (!viewport.contains(anchor)) continue;
+      try {
+        final value = const MeasurementEngine().measure(measurement, document);
+        body.writeln(
+          '<text x="${_n(anchor.x + measurement.offsetX)}" '
+          'y="${_n(anchor.y + measurement.offsetY)}" fill="#536878" '
+          'font-family="Microsoft YaHei, PingFang SC, sans-serif" '
+          'font-size="10">${_escape(value.display)}</text>',
+        );
+      } on FormatException {
+        continue;
+      }
+    }
+    body.writeln('</g>');
+    return '''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${_n(outputWidth ?? viewport.width)}" height="${_n(outputHeight ?? viewport.height)}" viewBox="${_n(viewport.left)} ${_n(viewport.top)} ${_n(viewport.width)} ${_n(viewport.height)}">
+<defs><clipPath id="viewportClip"><rect x="${_n(viewport.left)}" y="${_n(viewport.top)}" width="${_n(viewport.width)}" height="${_n(viewport.height)}"/></clipPath></defs>
+$body</svg>
+''';
+  }
+
   String _objectSvg(
     GeometryObject object,
     GeometryDocument document,

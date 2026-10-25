@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-import 'dart:async';
 import 'dart:convert';
 
+import '../ai/ai_api_client.dart';
+import '../ai/tool_executor.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:http/http.dart' as http;
 import 'package:moesketchpad_core/moesketchpad_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -116,19 +116,14 @@ class SecureAiSettingsStore implements AiSettingsStore {
 }
 
 class AiBloc extends Cubit<AiState> {
-  AiBloc({http.Client? client, AiSettingsStore? settings})
-    : _client = client ?? http.Client(),
-      _ownsClient = client == null,
+  AiBloc({AiApiClient? apiClient, AiSettingsStore? settings})
+    : _apiClient = apiClient ?? AiApiClient(),
       _settings = settings ?? SecureAiSettingsStore(),
       super(const AiState()) {
     loadSettings();
   }
 
-  static const _maxResponseBytes = 1024 * 1024;
-  static const _maxRequestBytes = 1024 * 1024;
-
-  final http.Client _client;
-  final bool _ownsClient;
+  final AiApiClient _apiClient;
   final AiSettingsStore _settings;
   String? _apiKey;
 
@@ -287,26 +282,47 @@ class AiBloc extends Cubit<AiState> {
         {'role': 'system', 'content': systemPrompt(language)},
         {'role': 'user', 'content': userPrompt},
       ];
-      var content = await _requestCompletion(uri, apiKey, messages);
+      var completion = await _apiClient.complete(
+        endpoint: uri,
+        model: state.model.trim(),
+        apiKey: apiKey,
+        messages: messages,
+      );
+      String proposalFor(AiCompletion value) => value.toolCalls.isNotEmpty
+          ? ToolExecutor().toProposal(value.toolCalls)
+          : _extractJsonProposal(value.content);
       late String proposal;
       try {
-        proposal = _extractJsonProposal(content);
+        proposal = proposalFor(completion);
       } on FormatException catch (error) {
-        content = await _requestCompletion(uri, apiKey, [
-          ...messages,
-          {'role': 'assistant', 'content': content},
-          {
-            'role': 'user',
-            'content':
-                'Correct the previous response so it can be imported. '
-                'Validation error: ${error.message}. Return only one JSON '
-                'object with summary and objects. Every object must include '
-                'a unique string id, a supported string kind, and a points '
-                'array of numeric {x,y} coordinates. Do not omit required '
-                'fields, add prose, or use Markdown fences.',
-          },
-        ]);
-        proposal = _extractJsonProposal(content);
+        final invalidOutput = completion.toolCalls.isEmpty
+            ? completion.content
+            : jsonEncode({
+                'tool_calls': [
+                  for (final call in completion.toolCalls)
+                    {'name': call.name, 'arguments': call.arguments},
+                ],
+              });
+        completion = await _apiClient.complete(
+          endpoint: uri,
+          model: state.model.trim(),
+          apiKey: apiKey,
+          messages: [
+            ...messages,
+            {'role': 'assistant', 'content': invalidOutput},
+            {
+              'role': 'user',
+              'content':
+                  'Correct the previous response so it can be imported. '
+                  'Validation error: ${error.message}. Return only one JSON '
+                  'object with summary and objects. Every object must include '
+                  'a unique string id, a supported string kind, and a points '
+                  'array of numeric {x,y} coordinates. Do not omit required '
+                  'fields, add prose, or use Markdown fences.',
+            },
+          ],
+        );
+        proposal = proposalFor(completion);
       }
       preview(proposal, current);
     } on Object catch (error) {
@@ -314,68 +330,14 @@ class AiBloc extends Cubit<AiState> {
       emit(
         state.copyWith(
           busy: false,
-          error: error is FormatException || error is HttpException
-              ? error.toString().replaceFirst('FormatException: ', '')
-              : 'AI request failed: $error',
+          error: error is FormatException
+              ? error.message
+              : error is AiRequestException
+              ? error.message
+              : 'AI request failed.',
         ),
       );
     }
-  }
-
-  Future<String> _requestCompletion(
-    Uri uri,
-    String apiKey,
-    List<Map<String, String>> messages,
-  ) async {
-    final body = jsonEncode({
-      'model': state.model.trim(),
-      'messages': messages,
-    });
-    if (utf8.encode(body).length > _maxRequestBytes) {
-      throw const FormatException('AI request exceeds the 1 MiB limit.');
-    }
-
-    final request = http.Request('POST', uri)
-      ..headers.addAll({
-        'Authorization': 'Bearer $apiKey',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      })
-      ..followRedirects = false
-      ..body = body;
-    final response = await _client
-        .send(request)
-        .timeout(const Duration(seconds: 60));
-    final bytes = <int>[];
-    final stream = StreamIterator<List<int>>(response.stream);
-    try {
-      await () async {
-        while (await stream.moveNext()) {
-          final chunk = stream.current;
-          if (bytes.length + chunk.length > _maxResponseBytes) {
-            throw const FormatException('AI response exceeds the 1 MiB limit.');
-          }
-          bytes.addAll(chunk);
-        }
-      }().timeout(const Duration(seconds: 60));
-    } on TimeoutException {
-      await stream.cancel();
-      rethrow;
-    } catch (_) {
-      await stream.cancel();
-      rethrow;
-    }
-    final responseText = utf8.decode(bytes);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw HttpException(
-        _serverErrorMessage(responseText, response.statusCode, apiKey),
-      );
-    }
-    final content = _extractContent(jsonDecode(responseText));
-    if (content.length > _maxResponseBytes) {
-      throw const FormatException('AI proposal exceeds the 1 MiB limit.');
-    }
-    return content;
   }
 
   static String? _validateEndpoint(String value) {
@@ -412,33 +374,6 @@ class AiBloc extends Cubit<AiState> {
     );
   }
 
-  static String _extractContent(Object? response) {
-    if (response is! Map) {
-      throw const FormatException('AI server returned an invalid response.');
-    }
-    final choices = response['choices'];
-    if (choices is! List || choices.isEmpty || choices.first is! Map) {
-      throw const FormatException('AI server response has no message choices.');
-    }
-    final message = (choices.first as Map)['message'];
-    if (message is! Map) {
-      throw const FormatException(
-        'AI server response has no assistant message.',
-      );
-    }
-    final content = message['content'];
-    if (content is String) return content;
-    if (content is List) {
-      final parts = content
-          .whereType<Map>()
-          .map((part) => part['text'])
-          .whereType<String>()
-          .toList();
-      if (parts.isNotEmpty) return parts.join('\n');
-    }
-    throw const FormatException('AI response content is empty or unsupported.');
-  }
-
   static String _extractJsonProposal(String content) {
     var candidate = content.trim();
     final fenced = RegExp(
@@ -468,27 +403,6 @@ class AiBloc extends Cubit<AiState> {
       GeometryObject.fromJson(object);
     }
     return candidate;
-  }
-
-  static String _serverErrorMessage(
-    String body,
-    int statusCode,
-    String apiKey,
-  ) {
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is Map && decoded['error'] is Map) {
-        final message = (decoded['error'] as Map)['message'];
-        if (message is String && message.isNotEmpty) {
-          final safeMessage = message.replaceAll(apiKey, '[redacted]');
-          return 'AI server returned HTTP $statusCode: '
-              '${safeMessage.substring(0, safeMessage.length.clamp(0, 300))}';
-        }
-      }
-    } on FormatException {
-      // Fall through to the status-only diagnostic.
-    }
-    return 'AI server returned HTTP $statusCode.';
   }
 
   void preview(String source, GeometryDocument current) {
@@ -568,12 +482,6 @@ class AiBloc extends Cubit<AiState> {
 
   void discard() {
     emit(state.copyWith(clearPreview: true, clearError: true));
-  }
-
-  @override
-  Future<void> close() {
-    if (_ownsClient) _client.close();
-    return super.close();
   }
 }
 

@@ -164,7 +164,7 @@
   "fontCuratedNotice": "当前使用内置字体候选；系统字体枚举需要可选原生插件。",
   "renderLayers": "渲染层",
   "fitView": "适合窗口",
-  "exportPage": "导出页面 SVG",
+  "exportPage": "导出当前视口 SVG",
   "visibility": "可见性",
   "notImplemented": "{feature} 尚未实现或未接入本构建。",
   "previewObjects": "预览：将新增 {count} 个对象",

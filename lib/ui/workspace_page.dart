@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -21,6 +22,8 @@ import '../l10n/app_localizations.dart';
 import '../platform/close_guard.dart';
 import '../platform/document_file_name.dart';
 import '../platform/file_service.dart';
+import '../platform/recent_files_store.dart';
+import '../services/animated_gif_exporter.dart';
 import 'canvas/sketchpad_canvas.dart';
 import 'dialogs/about_dialog.dart';
 import 'dialogs/password_dialog.dart';
@@ -36,15 +39,21 @@ class WorkspacePage extends StatefulWidget {
 }
 
 class _WorkspacePageState extends State<WorkspacePage> {
+  final _canvasKey = GlobalKey<SketchpadCanvasState>();
   bool _dockCollapsed = false;
   bool _closeRegistered = false;
   bool _closing = false;
+  List<String> _recentFiles = const [];
+  final Map<String, String> _recoveryPasswords = {};
+  Timer? _autoSaveTimer;
+  bool _autoSaveBusy = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _installCloseGuard();
+      await _loadRecentFiles();
       final initial = widget.initialFilePath;
       if (initial != null && mounted) {
         final picked = await FileService.readFromPath(initial);
@@ -52,15 +61,141 @@ class _WorkspacePageState extends State<WorkspacePage> {
           await _openPicked(picked);
         }
       }
+      if (mounted) await _offerDraftRecovery();
     });
+    _autoSaveTimer = Timer.periodic(
+      const Duration(seconds: 60),
+      (_) => _autoSaveDirtyTabs(),
+    );
   }
 
   @override
   void dispose() {
+    _autoSaveTimer?.cancel();
     if (_closeRegistered) {
       CloseGuard.uninstall();
     }
     super.dispose();
+  }
+
+  Future<void> _loadRecentFiles() async {
+    try {
+      final files = await const RecentFilesStore().read();
+      if (mounted) setState(() => _recentFiles = files);
+    } on Object catch (error) {
+      if (mounted) _showError('Could not load recent files: $error');
+    }
+  }
+
+  Future<void> _recordRecentPath(String path) async {
+    try {
+      final files = await const RecentFilesStore().record(path);
+      if (mounted) setState(() => _recentFiles = files);
+    } on Object catch (error) {
+      if (mounted) _showError('Could not save recent files: $error');
+    }
+  }
+
+  Future<void> _openRecent(String path) async {
+    if (kIsWeb) {
+      await _openFile();
+      return;
+    }
+    try {
+      final picked = await FileService.readFromPath(path);
+      if (!mounted) return;
+      if (picked == null) {
+        _showError('Recent document no longer exists: $path');
+        return;
+      }
+      await _openPicked(picked);
+    } on Object catch (error) {
+      if (mounted) {
+        _showError(AppLocalizations.of(context).openFailed('$error'));
+      }
+    }
+  }
+
+  Future<void> _autoSaveDirtyTabs() async {
+    if (!mounted || _autoSaveBusy) return;
+    _autoSaveBusy = true;
+    try {
+      final documents = context.read<DocumentBloc>().state;
+      final codec = MspCodec();
+      for (final tab in documents.tabs) {
+        if (!tab.dirty) continue;
+        final password = _recoveryPasswords[tab.id];
+        if (password == null) continue;
+        try {
+          final bytes = await codec.encode(tab.document, password: password);
+          await FileService.writeRecovery(tab.id, Uint8List.fromList(bytes));
+        } on Object catch (error) {
+          if (mounted) _showError('Autosave failed: $error');
+        }
+      }
+    } finally {
+      _autoSaveBusy = false;
+    }
+  }
+
+  Future<void> _offerDraftRecovery() async {
+    if (!mounted) return;
+    late final List<RecoveryDraft> drafts;
+    try {
+      drafts = await FileService.listRecovery();
+    } on Object catch (error) {
+      if (mounted) _showError('Could not inspect recovery drafts: $error');
+      return;
+    }
+    if (drafts.isEmpty || !mounted) return;
+    final selected = await showDialog<RecoveryDraft>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Recover an autosaved document?'),
+        content: SizedBox(
+          width: 360,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final draft in drafts)
+                ListTile(
+                  leading: const Icon(Icons.restore),
+                  title: Text('Draft ${draft.key}'),
+                  onTap: () => Navigator.of(dialogContext).pop(draft),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(AppLocalizations.of(context).cancel),
+          ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    final password = await showPasswordDialog(
+      context,
+      saving: false,
+      fileName: 'Draft ${selected.key}',
+    );
+    if (password == null || !mounted) return;
+    try {
+      final document = await MspCodec().decode(
+        selected.bytes,
+        password: password,
+      );
+      if (!mounted) return;
+      final bloc = context.read<DocumentBloc>();
+      bloc.recoverDocument(document);
+      _recoveryPasswords[bloc.state.active.id] = password;
+      context.read<CanvasBloc>().applyView(document.view);
+      context.read<SelectionBloc>().clear();
+      await FileService.deleteRecovery(selected.key);
+    } on Object catch (error) {
+      _showError('Could not recover draft: $error');
+    }
   }
 
   Future<void> _installCloseGuard() async {
@@ -84,7 +219,12 @@ class _WorkspacePageState extends State<WorkspacePage> {
     _closing = true;
     try {
       final bloc = context.read<DocumentBloc>();
-      if (!bloc.state.anyDirty) return true;
+      if (!bloc.state.anyDirty) {
+        for (final tab in bloc.state.tabs) {
+          await _deleteRecovery(tab.id);
+        }
+        return true;
+      }
       for (var index = 0; index < bloc.state.tabs.length; index++) {
         if (!mounted) return false;
         if (!bloc.state.tabs[index].dirty) continue;
@@ -100,6 +240,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
           final saved = await _saveActive();
           if (!saved) return false;
         }
+      }
+      for (final tab in bloc.state.tabs) {
+        await _deleteRecovery(tab.id);
       }
       return true;
     } finally {
@@ -176,6 +319,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
       }
       if (path == null) return false;
       documentBloc.saveSucceeded(path, document);
+      _recoveryPasswords[tab.id] = password;
+      await _recordRecentPath(path);
+      await _deleteRecovery(tab.id);
       return true;
     } on MspFormatException catch (error) {
       _showError(l10n.saveFailed(error.message));
@@ -276,6 +422,10 @@ class _WorkspacePageState extends State<WorkspacePage> {
         document,
         path: picked.path ?? picked.name,
       );
+      final documentBloc = context.read<DocumentBloc>();
+      _recoveryPasswords[documentBloc.state.active.id] = password;
+      await _recordRecentPath(picked.path ?? picked.name);
+      if (!mounted) return;
       context.read<CanvasBloc>().applyView(document.view);
       context.read<SelectionBloc>().clear();
       context.read<AnimationBloc>().reset();
@@ -287,6 +437,14 @@ class _WorkspacePageState extends State<WorkspacePage> {
       _showError(l10n.openFailed(error.message));
     } on Object catch (error) {
       _showError(l10n.openFailed('$error'));
+    }
+  }
+
+  Future<void> _deleteRecovery(String id) async {
+    try {
+      await FileService.deleteRecovery(id);
+    } on Object catch (error) {
+      if (mounted) _showError('Could not clear recovery draft: $error');
     }
   }
 
@@ -308,6 +466,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
       }
     }
     if (!mounted) return;
+    await _deleteRecovery(tab.id);
+    if (!mounted) return;
+    _recoveryPasswords.remove(tab.id);
     final previousActiveId = bloc.state.active.id;
     bloc.forceClose(index);
     if (bloc.state.active.id != previousActiveId) {
@@ -450,6 +611,13 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
   void _onMenuAction(String action) {
     final l10n = AppLocalizations.of(context);
+    if (action.startsWith('recent-')) {
+      final index = int.tryParse(action.substring('recent-'.length));
+      if (index != null && index >= 0 && index < _recentFiles.length) {
+        _openRecent(_recentFiles[index]);
+        return;
+      }
+    }
     switch (action) {
       case 'new':
         _newTab();
@@ -491,6 +659,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
         _addTextAnnotation();
       case 'exportPage':
         _exportSvg();
+      case 'exportGif':
+        _exportAnimationGif();
       case 'closeTab':
         _closeTab(context.read<DocumentBloc>().state.activeIndex);
       case 'selectTool':
@@ -567,8 +737,13 @@ class _WorkspacePageState extends State<WorkspacePage> {
   Future<void> _exportSvg() async {
     final l10n = AppLocalizations.of(context);
     final document = context.read<DocumentBloc>().state.active.document;
-    final svg = SvgExporter().export(document);
     try {
+      final viewport = _canvasKey.currentState?.viewportWorldBounds;
+      if (viewport == null) {
+        throw StateError('Canvas viewport is not ready for export.');
+      }
+
+      final svg = SvgExporter().exportViewport(document, viewport);
       await FileService.saveExport(
         suggestedName: '${document.title}.svg',
         bytes: Uint8List.fromList(utf8.encode(svg)),
@@ -577,6 +752,79 @@ class _WorkspacePageState extends State<WorkspacePage> {
       );
     } on Object catch (error) {
       _showError(l10n.saveFailed('$error'));
+    }
+  }
+
+  Future<void> _exportAnimationGif() async {
+    final document = context.read<DocumentBloc>().state.active.document;
+    if (document.animations.isEmpty) {
+      _showInfo(
+        Localizations.localeOf(context).languageCode == 'zh'
+            ? '请先为文档添加动点动画。'
+            : 'Add a point animation to this document first.',
+      );
+      return;
+    }
+    final animation = document.animations.length == 1
+        ? document.animations.single
+        : await showDialog<AnimationSpec>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: Text(
+                Localizations.localeOf(context).languageCode == 'zh'
+                    ? '选择要导出的动画'
+                    : 'Choose an animation to export',
+              ),
+              content: SizedBox(
+                width: 360,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final item in document.animations)
+                      ListTile(
+                        leading: const Icon(Icons.animation),
+                        title: Text(item.id),
+                        onTap: () => Navigator.of(dialogContext).pop(item),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(AppLocalizations.of(context).cancel),
+                ),
+              ],
+            ),
+          );
+    if (animation == null || !mounted) return;
+    final language = Localizations.localeOf(context).languageCode;
+    try {
+      final viewport = _canvasKey.currentState?.viewportWorldBounds;
+      if (viewport == null) {
+        throw StateError('Canvas viewport is not ready for export.');
+      }
+      final bytes = const AnimatedGifExporter().export(
+        document: document,
+        animation: animation,
+        viewport: viewport,
+      );
+      final tab = context.read<DocumentBloc>().state.active;
+      final baseName = tab.path == null
+          ? AppLocalizations.of(context).untitled(tab.untitledIndex)
+          : p.basenameWithoutExtension(tab.path!);
+      await FileService.saveExport(
+        suggestedName: '$baseName.gif',
+        bytes: Uint8List.fromList(bytes),
+        extension: 'gif',
+        mimeType: 'image/gif',
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        _showError(
+          language == 'zh' ? 'GIF 导出失败：$error' : 'GIF export failed: $error',
+        );
+      }
     }
   }
 
@@ -754,7 +1002,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                                 context.read<ToolBloc>().select(tool),
                           ),
                         ),
-                        const Expanded(child: SketchpadCanvas()),
+                        Expanded(child: SketchpadCanvas(key: _canvasKey)),
                         RightDock(
                           cute: themeState.cute,
                           collapsed:
@@ -786,9 +1034,23 @@ class _WorkspacePageState extends State<WorkspacePage> {
       _topMenu(l10n.menuFile, [
         _menuItem('new', l10n.newDocument, Icons.note_add_outlined),
         _menuItem('open', l10n.open, Icons.folder_open_outlined),
+        if (_recentFiles.isNotEmpty) const PopupMenuDivider(height: 8),
+        for (var index = 0; index < _recentFiles.length; index++)
+          _menuItem(
+            'recent-$index',
+            p.basename(_recentFiles[index]),
+            Icons.history,
+          ),
         _menuItem('save', l10n.save, Icons.save_outlined),
         _menuItem('saveAs', l10n.saveAs, Icons.save_as_outlined),
         _menuItem('exportPage', l10n.exportPage, Icons.ios_share),
+        _menuItem(
+          'exportGif',
+          Localizations.localeOf(context).languageCode == 'zh'
+              ? '导出动画 GIF'
+              : 'Export animation GIF',
+          Icons.animation,
+        ),
         _menuItem('closeTab', l10n.closeTab, Icons.close),
       ], compact: width < 860),
       _topMenu(l10n.menuEdit, [
@@ -895,7 +1157,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
   Widget _topMenu(
     String label,
-    List<PopupMenuItem<String>> items, {
+    List<PopupMenuEntry<String>> items, {
     bool compact = false,
   }) {
     return PopupMenuButton<String>(

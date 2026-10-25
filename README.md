@@ -23,7 +23,7 @@
 - 纯 Dart 内核：文档 schema v2、R-tree、稳健求交、阻尼最小二乘约束求解、
   测量、函数 AST、动画求值。
 - `.moesp` v2：Argon2id + AES-256-GCM + gzip，头部作为 AAD；无明文几何。
-- `msp` CLI：create/constraint/label/measure/animate/calc/view/validate/
+- `moesp` CLI（兼容 `msp` 可执行别名）：create/constraint/label/measure/animate/calc/view/validate/
   inspect/convert/export/mcp-serve，统一退出码与 JSON 输出。
 - 三角简写与规范形式等价：`--triangle-90-3*4*5-5/180`。
 - MCP stdio 白名单工具与 workspace 路径限制；AI 支持可配置 OpenAI 兼容
@@ -32,12 +32,14 @@
 - 中英文 ARB、萌化/专业主题、密码打开保存、关于界面、COPYING/NOTICE/CI
   与 Windows/macOS/Web 平台配置。
 
-## 明确未实现 / 限制
+## 实现状态与限制
 
-- 设备钥匙串/设备密钥（仅密码）；自动保存与崩溃恢复；系统字体枚举。
-- GIF/APNG/MP4 导出；持久化“最近文件”。
-- 相切约束、交点吸附、完整 SVG 页面裁剪之外的无界画布导出等仍需完善；
-  系统字体枚举在 Web 不可用。
+- 桌面端与 Web 最近文件列表及加密自动保存/崩溃恢复已接入；自动保存仅针对本会话已打开或保存且当前会话已提供密码的文档，恢复草稿时需要再次输入密码。
+- 桌面/Web GIF 动画导出已实现基本几何对象渲染；APNG/MP4 和 CLI 动图导出未实现。
+- 线-圆、圆-圆外切约束、线段-线段/线段-圆交点吸附、当前视口 SVG 导出已实现。
+- 设备钥匙串密钥包装和系统字体枚举未实现；Web 不支持本地字体枚举。
+- 属性面板内执行完整 `moesp` CLI 命令的命令控制台尚未实现；桌面命令行可独立调用 CLI。
+- 固定默认密码不提供：相同默认密码会让未设置密码保护的文件失去有效保密性。
 - 10 万对象 60fps 尚无基准；macOS 打包需在 macOS + Xcode 验证。
 - AI 连接支持 OpenAI 兼容的 Chat Completions API；浏览器端点需允许 CORS。
   桌面端 API Key 使用系统安全存储，Web 端使用浏览器加密存储；不要在共享/不可信设备保存密钥。
@@ -65,7 +67,7 @@ dart run packages/moesketchpad_cli/bin/msp.dart help
 dart run packages/moesketchpad_cli/bin/msp.dart calc "sqrt(3^2+4^2)" --json
 
 # 密码只从环境变量读取；不要写在命令行
-export MSP_PASSWORD='your password'
+$env:MSP_PASSWORD='your password' # PowerShell; use an environment variable on other shells
 dart run packages/moesketchpad_cli/bin/msp.dart create point --x=1 --y=2 --file doc.moesp
 dart run packages/moesketchpad_cli/bin/msp.dart inspect doc.moesp --json
 ```
@@ -73,13 +75,16 @@ dart run packages/moesketchpad_cli/bin/msp.dart inspect doc.moesp --json
 构建独立 CLI：
 
 ```bash
-(cd packages/moesketchpad_cli && dart compile exe bin/msp.dart -o msp)
+Push-Location packages/moesketchpad_cli
+dart compile exe bin/msp.dart -o moesp.exe
+Pop-Location
 ```
 
 ## 打包与文件关联
 
 - Windows 图标已替换；安装器与 `.moesp` 关联：
-  `packaging/windows/moesketchpad.iss`（Inno Setup 6+），开发注册：
+  `packaging/windows/moesketchpad.iss`（Inno Setup 6+，现代向导样式），安装时注册
+  `moesp.exe` 的系统 PATH 和文件关联，卸载时清除 PATH 项；开发注册：
   `packaging/windows/register_moesp.ps1`。EXE 版本资源包含产品/公司/版权/文件名/
   版本说明，使用语言中性 Unicode 字符串表。
 - macOS UTI/Document Type：`macos/Runner/Info.plist`；图标资产已替换。

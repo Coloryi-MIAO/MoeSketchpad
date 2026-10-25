@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 
-import 'file_service_stub.dart' show PickedFile;
+import 'file_service_stub.dart' show PickedFile, RecoveryDraft;
 
 const XTypeGroup _moeTypeGroup = XTypeGroup(
   label: 'MoeSketchpad',
@@ -92,5 +92,49 @@ class FileService {
     } finally {
       if (await temporary.exists()) await temporary.delete();
     }
+  }
+
+  static Future<void> writeRecovery(String key, Uint8List bytes) async {
+    if (!RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(key)) {
+      throw ArgumentError.value(key, 'key', 'Invalid recovery identifier.');
+    }
+    final directory = Directory(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}'
+      'moesketchpad${Platform.pathSeparator}recovery',
+    );
+    await directory.create(recursive: true);
+    final target = File('${directory.path}${Platform.pathSeparator}$key.moesp');
+    await writeToPath(target.path, bytes);
+  }
+
+  static Future<List<RecoveryDraft>> listRecovery() async {
+    final directory = Directory(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}'
+      'moesketchpad${Platform.pathSeparator}recovery',
+    );
+    if (!await directory.exists()) return const [];
+    final drafts = <RecoveryDraft>[];
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File || !entity.path.endsWith('.moesp')) continue;
+      final key = entity.uri.pathSegments.last.replaceFirst(
+        RegExp(r'\.moesp$'),
+        '',
+      );
+      if (!RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(key)) continue;
+      drafts.add(RecoveryDraft(key: key, bytes: await entity.readAsBytes()));
+    }
+    return drafts;
+  }
+
+  static Future<void> deleteRecovery(String key) async {
+    if (!RegExp(r'^[A-Za-z0-9_-]{1,80}$').hasMatch(key)) {
+      throw ArgumentError.value(key, 'key', 'Invalid recovery identifier.');
+    }
+    final file = File(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}'
+      'moesketchpad${Platform.pathSeparator}recovery'
+      '${Platform.pathSeparator}$key.moesp',
+    );
+    if (await file.exists()) await file.delete();
   }
 }

@@ -108,12 +108,30 @@ class DocumentBloc extends Cubit<DocumentState> {
       emit(state.copyWith(activeIndex: existing));
       return;
     }
+
     _tabSequence++;
     final tab = DocumentTab(
       id: 'doc-$_tabSequence',
       untitledIndex: 0,
       document: document,
       path: path,
+    );
+    emit(
+      state.copyWith(
+        tabs: [...state.tabs, tab],
+        activeIndex: state.tabs.length,
+      ),
+    );
+  }
+
+  void recoverDocument(GeometryDocument document) {
+    _untitledSequence++;
+    _tabSequence++;
+    final tab = DocumentTab(
+      id: 'doc-$_tabSequence',
+      untitledIndex: _untitledSequence,
+      document: document,
+      dirty: true,
     );
     emit(
       state.copyWith(

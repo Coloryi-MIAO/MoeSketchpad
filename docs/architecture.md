@@ -20,7 +20,7 @@ moesketchpad_core（纯 Dart，不依赖 Flutter/dart:ui/dart:io）
   ├─ 测量、动画求值、函数 AST/采样
   └─ MSP v2 codec（Argon2id + AES-256-GCM + gzip）
         ▲
-        ├─ msp CLI（args）─┬─ MCP stdio 白名单服务
+        ├─ moesp CLI（args；msp 仅兼容入口）─┬─ MCP stdio 白名单服务
         │                  └─ SVG/JSON 导出
         └─ Flutter UI（文件选择、窗口关闭、beforeunload、预览确认）
 ```
@@ -38,14 +38,14 @@ lib/
   platform/                   文件、关闭拦截、窗口的 io/web 条件实现
   l10n/                       ARB 与生成代码
 packages/moesketchpad_core/   纯 Dart 几何/MSP 内核
-packages/moesketchpad_cli/    msp 命令与 MCP server
+packages/moesketchpad_cli/    moesp 命令与 MCP server
 packages/*/test/              内核与 CLI 测试
 packaging/windows/            Inno Setup / 开发注册脚本
 docs/architecture.md          本文
 COPYING / NOTICE / SOURCE-AVAILABILITY.txt
 ```
 
-`lib/` 与 `msp` 共用 core，不存在两份几何算法。UI 不直接实现求交、测量或
+`lib/` 与 `moesp` 共用 core，不存在两份几何算法。UI 不直接实现求交、测量或
 序列化。
 
 ## 2. .moesp v2 格式规范（草案，已实现）
@@ -92,22 +92,22 @@ COPYING / NOTICE / SOURCE-AVAILABILITY.txt
 
 ## 3. CLI 规范与安全策略
 
-入口：`msp`（Dart 包 `packages/moesketchpad_cli`，`executables: msp`）。
+入口：`moesp`（Dart 包 `packages/moesketchpad_cli`；`msp` 是兼容别名）。
 
 ```text
-msp help [command] [--lang zh|en] [--json]
-msp create <primitive> [options] [--file doc.moesp]
-msp constraint <type> <target...> [--value=n] [--file doc.moesp]
-msp label <target> --text=A [--auto] [--offset=x,y] [...]
-msp measure <target> --type=length|arcLength|angle|area|slope [--unit=...]
-msp animate <point> --path=<obj> --t=0..1 --speed=1 --loop|--pingpong --trail=n
-msp calc <expression> [--var=x=1]...
-msp view [--zoom=] [--pan-x=] [--page=] [--landscape] [...]
-msp validate <file.moesp> [--deep]
-msp inspect <file.moesp> [--header] [--full]
-msp convert <input> --to=json|msp --output=<path> [--force]
-msp export <file.moesp> --format=svg|json --output=<path>
-msp mcp-serve [--workspace=<dir>] [--audit-log=<file>]
+moesp help [command] [--lang zh|en] [--json]
+moesp create <primitive> [options] [--file doc.moesp]
+moesp constraint <type> <target...> [--value=n] [--file doc.moesp]
+moesp label <target> --text=A [--auto] [--offset=x,y] [...]
+moesp measure <target> --type=length|arcLength|angle|area|slope [--unit=...]
+moesp animate <point> --path=<obj> --t=0..1 --speed=1 --loop|--pingpong --trail=n
+moesp calc <expression> [--var=x=1]...
+moesp view [--zoom=] [--pan-x=] [--page=] [--landscape] [...]
+moesp validate <file.moesp> [--deep]
+moesp inspect <file.moesp> [--header] [--full]
+moesp convert <input> --to=json|msp --output=<path> [--force]
+moesp export <file.moesp> --format=svg|json --output=<path>
+moesp mcp-serve [--workspace=<dir>] [--audit-log=<file>]
 ```
 
 所有命令接受全局 `--lang zh|en`、`--json`、`--file`、`--password-env`（默认
@@ -124,14 +124,14 @@ polar、implicit，表达式由纯 Dart AST 解析（无 eval）。
 
 ```text
 --triangle-<angleType>-<a>*<b>*<c>-<hypotenuse>/<rotation>
-msp create --triangle-90-3*4*5-5/180
+moesp create --triangle-90-3*4*5-5/180
 ```
 
 - 正则只接受有限正数，`angleType` 当前只支持 `90`（right）；其他角度类型会
   返回退出码 2，建议使用显式参数。
 - `<hypotenuse>` 必须是最大边；排序后满足 `a²+b²=c²`，相对容差 1e-9。
 - 简写在进入 args 解析前转换为内部 AST，与规范形式
-  `msp create triangle --type=right --sides=3,4,5 --hypotenuse=5 --rotation=180`
+  `moesp create triangle --type=right --sides=3,4,5 --hypotenuse=5 --rotation=180`
   完全等价（CLI 测试验证 JSON 对象一致）。
 - 语义：A=(0,0)，B 在 rotation 方向上，长度=hypotenuse；C 由两腿圆交点求得，
   取定向法线正侧。rotation=180° 时 B 在负 x 轴。无解返回 5，不猜坐标。
@@ -145,8 +145,9 @@ stderr。约束命令在求解未收敛时返回 5，且不写文件。
 只读、只接受 `.moesp`、大小限制；审计日志仅记录时间/工具/成功，不含文档或密码。
 AI 面向的 CLI 不执行任意 shell，工具参数按白名单结构化校验。
 
-未实现：`tangent` 约束会明确报错；GIF/APNG/MP4 导出没有已验证编码器，命令
-直接以参数错误拒绝；设备密钥、系统字体枚举等见平台限制。
+已实现线-圆切线和圆-圆外切约束；圆-圆内切尚未支持。Flutter 桌面/Web 支持
+基本几何对象的 GIF 动画导出；CLI 动图、APNG、MP4 未实现。导出当前视口的
+SVG 已支持。设备密钥、系统字体枚举等见平台限制。
 
 ## 4. 几何内核与函数解析
 
@@ -163,8 +164,8 @@ AI 面向的 CLI 不执行任意 shell，工具参数按白名单结构化校验
   直线/圆的退化构造检查共用。单位用于新测量的默认输出单位。
 - 约束：阻尼最小二乘 + 有限差分 Jacobian + 高斯消元；支持 coincident,
   distance, horizontal, vertical, pointOnLine, pointOnCircle, parallel,
-  perpendicular, equalLength, angle。报告 converged/iterations/residual；
-  不收敛时调用方不得提交。tangent 预留但明确不可解。
+  perpendicular, equalLength, angle, tangentLineCircle, tangentCircleCircle
+  （外切）。报告 converged/iterations/residual；不收敛时调用方不得提交。
 - 测量：length/arcLength/angle/area/slope/functionValue；单位 unitless、
   cm、mm、px、custom；cm/mm 使用文档 `ViewState.unitScaleMm`（默认 96dpi）。
 - 函数：不可变 AST（number/variable/unary/binary/call），长度 4096、节点 2048、
@@ -183,8 +184,8 @@ AI 面向的 CLI 不执行任意 shell，工具参数按白名单结构化校验
 - `RTree<T>`：动态插入、二次分裂、查询、删除；`SpatialIndex` 包装对象，包含
   unbounded 集合，支持视口查询、线/圆/多边形距离命中与框选。当前 UI 在文档
   身份变化时重建索引；10 万级增量索引与 LOD 缓存仍待压力测试。
-- 吸附：对象端点/中点/线段/直线/圆投影、标尺辅助线、网格；没有在 UI 中实现
-  对象交点吸附（core 提供求交，后续接入）。
+- 吸附：对象端点/中点/线段/直线/圆投影、线段-线段/线段-圆交点、
+  标尺辅助线、网格；容差与吸附半径随画布几何设定生效。
 - 无限工作区使用浅灰背景；网格、对象和辅助线覆盖当前视口，不绘制纸张边界。
   标尺四边显示，缩放/平移实时重绘；从标尺拖拽生成辅助线，右键角落重置原点。
 - 静态背景、几何、选择/动画覆盖层拆为独立 RepaintBoundary。没有宣称在 10 万
@@ -239,7 +240,8 @@ MaterialApp(locale, theme)
   CLI 支持 `--auto`、上下标/大小写/Greek 简写。
 - 测量：UI/CLI 都通过 `MeasurementEngine` 计算；附着目标 ID，几何变化后重新
   计算；支持单位/精度。测量标签在画布与泊坞窗显示。
-- 导出动图：**未实现**（无验证过的编码器）。SVG/JSON 通过 CLI 导出；SVG 当前
+- 导出动图：桌面和 Web UI 可导出 GIF（基本几何对象栅格化；尺寸/帧数受限）。
+  CLI 动图、APNG、MP4 未实现。SVG/JSON 通过 CLI 导出；SVG 当前
   支持点/线/圆/弧/多边形/椭圆等基本对象，复杂圆锥/函数的 SVG 仍需完善。
 
 ## 8. AI 默认系统提示词（全文）
@@ -250,7 +252,7 @@ MaterialApp(locale, theme)
 你是「萌板 / MoeSketchpad」的几何绘图助手，服务对象是初中、高中与大学阶段的数学学习者。你只能通过本应用显式提供的白名单工具工作，不能直接操作宿主机。
 
 【可用工具】
-1. msp 白名单子命令：help、create、constraint、label、measure、animate、calc、view、validate、inspect、export。工具参数必须符合声明的 JSON Schema。
+1. moesp 白名单子命令：help、create、constraint、label、measure、animate、calc、view、validate、inspect、export。工具参数必须符合声明的 JSON Schema。
 2. 只读画布查询工具：读取当前文档的对象、约束、测量、视图与选中状态。
 3. 预演工具：所有修改必须先形成 preview 操作清单，等待用户确认。
 
@@ -272,7 +274,7 @@ MaterialApp(locale, theme)
 - 几何变化后测量应由内核重新计算，不得把旧值写成静态文本。
 
 【文件操作】
-- 只能通过 MspCodec 或白名单 msp 文件工具读取、验证或写入 .moesp 文档。
+- 只能通过 MspCodec 或白名单 moesp 文件工具读取、验证或写入 .moesp 文档。
 - 不得构造路径并绕过工作区根目录限制；不得把密码写入对话、日志或元数据。
 - 加密文档的打开/保存需要用户显式提供密码；不得尝试破解、猜测或缓存密码。
 
@@ -301,7 +303,10 @@ query 或 fragment 的地址，并禁用 HTTP 重定向，避免凭据跟随跳�
   “保存/不保存/取消”，保存失败不关闭。窗口关闭在 Windows/macOS 通过
   window_manager `preventClose` + WindowListener 拦截，逐个脏标签询问；
   Web 使用 `beforeunload` 原生提示（浏览器控制文案，可能被抑制）。
-- 自动保存/崩溃恢复：**未实现**；无 localStorage/IndexedDB 草稿。不得声称。
+- 自动保存/崩溃恢复：已实现已加密文档的临时草稿；仅对本会话已打开或保存且
+  当前会话已提供密码的标签生效。桌面写系统临时目录，Web 使用受限
+  localStorage；仅保存当前会话内存中的密码派生所需信息，不持久化密码，恢复时要求
+  用户重新输入。最近文件使用 SharedPreferences/localStorage 保存。
 - i18n：Flutter gen-l10n，`app_zh.arb` / `app_en.arb`，所有主要 UI、错误、
   提示词与 CLI 支持 zh/en。MCP/CLI `--lang`。
 - 字体：默认 Microsoft YaHei，平台回退到 Microsoft YaHei UI / PingFang SC /
@@ -341,13 +346,14 @@ COPYING/NOTICE 全文入口。
   窄窗口时自动折叠右侧属性泊坞窗。
 - macOS：`macos/Runner/Info.plist` 已声明 UTI 与 Document Type；AppIcon 资产
   已替换。Windows 上无法构建/验证 macOS，需 macOS runner + Xcode。
-- CI：`.github/workflows/build.yml` 使用 Flutter 3.47.6 矩阵构建 Web/Windows/
-  macOS，先跑 analyze/test；macOS 仅在 macOS runner 验证。
+-   CI：`.github/workflows/build.yml` 使用 Flutter 3.47.6 构建 Web/Windows/
+  macOS，Windows job 另编译 CLI 并生成 Inno Setup 安装器；macOS 仅在 macOS
+  runner 验证。
 - 文件关联的启动参数已传入 App；初始密码对话流程已接入桌面文件读取路径。
 
 ## 12. 里程碑、测试计划与限制
 
-已完成纵向切片：纯 Dart 内核、MSP v2、全命令 CLI 骨架、MCP 只读工具、CDR
+已完成纵向切片：纯 Dart 内核、MSP v2、moesp CLI、MCP 白名单服务、CDR
 壳层、无边界画布与页面/标尺/辅助线、基础点/线/圆/三角形/多边形/函数绘制、
 选择与拖拽、撤销、动点播放、标注/测量、AI JSON 预览、脏状态标签关闭/窗口
 关闭、密码保存加载、中英/主题、平台配置与合规材料。
@@ -356,21 +362,23 @@ COPYING/NOTICE 全文入口。
 
 - `flutter analyze`：通过。
 - `flutter test`：8/8 通过。
-- core `dart test`：8/8 通过。
-- CLI `dart test`：4/4 通过（真实子进程，含简写等价与退出码）。
+- core `dart test`：本轮验证 18 项通过。
+- CLI `dart test`：真实子进程（含简写等价与退出码）；本轮曾发现旧的 help
+  断言，已改为 `Usage: moesp`，需在最终验证中复跑。
 - `flutter build web --release`：通过。
 - `flutter build windows --release`：通过（411.9 s）；macOS 未在本机验证。
 
 后续里程碑（Copilot 任务见 `copanddsh.txt`）：
 
-1. 内核加固：更多 fuzz/性质测试、交点吸附、约束完整性与性能基准。
-2. Canvas：10 万对象、增量索引、笔迹/文本工具、交点吸附。
-3. 文档：自动保存/崩溃恢复、系统字体枚举（原生）、设备钥匙串、多窗口/最近文件。
-4. 导出：完整 SVG、PNG/PDF、GIF/APNG/MP4（需要验证编码器）。
+1. 内核加固：更多 fuzz/性质测试、圆-圆内切、约束完整性与性能基准。
+2. Canvas：10 万对象、增量索引、笔迹/文本工具与性能剖析。
+3. 文档：系统字体枚举（原生）、设备钥匙串、多窗口。
+4. 导出：完整 SVG、PNG/PDF、CLI GIF/APNG/MP4。
 5. AI/MCP：更多供应商协议适配、工具 schema 版本化、审计轮转、MCP 客户端传输。
 6. 发布：签名/公证、安装器 CI、完整 NOTICE 生成、macOS UTI 实机验证。
 
 平台限制（明确）：Web 无本地字体枚举、任意路径文件系统、进程调用、设备密钥；
-桌面设备密钥与系统字体枚举未实现；MP4/GIF 未实现；设备文件关联的 macOS 侧
+桌面设备密钥与系统字体枚举未实现；APNG/MP4 与 CLI 动图导出未实现；固定默认
+密码不会启用，因为所有人共享固定密码会破坏加密保护；设备文件关联的 macOS 侧
 当前 AI 直接请求依赖端点兼容 Chat Completions；Web 受 CORS/浏览器安全存储限制；
 不声称 60fps/全部原始需求功能均已实现。

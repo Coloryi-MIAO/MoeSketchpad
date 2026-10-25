@@ -57,6 +57,14 @@ jobs:
       - run: flutter test
       - name: Build Windows
         run: flutter build windows --release --dart-define=MSP_COMMIT=${{ github.sha }} --dart-define=MSP_BUILD_DATE=${{ github.run_started_at }}
+      - name: Compile moesp CLI
+        run: dart compile exe packages/moesketchpad_cli/bin/msp.dart -o build/windows/x64/runner/Release/moesp.exe
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" packaging\windows\moesketchpad.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Add GPL source notice to artifact
         shell: pwsh
         run: |
@@ -66,6 +74,10 @@ jobs:
         with:
           name: moesketchpad-windows
           path: build/windows/x64/runner/Release/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moesketchpad-windows-installer
+          path: packaging/windows/output/*.exe
 
   macos:
     runs-on: macos-latest

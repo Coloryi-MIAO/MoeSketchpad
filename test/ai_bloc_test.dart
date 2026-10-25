@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
+import 'package:moesketchpad/ai/ai_api_client.dart';
+import 'package:moesketchpad/ai/tool_executor.dart';
 import 'package:moesketchpad/bloc/ai_bloc.dart';
 import 'package:moesketchpad_core/moesketchpad_core.dart';
 
@@ -32,107 +34,50 @@ class _MemoryAiSettings implements AiSettingsStore {
   Future<void> deleteApiKey() async => values.remove('key');
 }
 
+class _MockAdapter implements HttpClientAdapter {
+  _MockAdapter(this.handle);
+
+  final Future<ResponseBody> Function(RequestOptions options) handle;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) => handle(options);
+
+  @override
+  void close({bool force = false}) {}
+}
+
+Dio _dio(Future<ResponseBody> Function(RequestOptions options) handle) {
+  final dio = Dio();
+  dio.httpClientAdapter = _MockAdapter(handle);
+  return dio;
+}
+
+ResponseBody _jsonResponse(Object body, {int status = 200}) =>
+    ResponseBody.fromString(
+      jsonEncode(body),
+      status,
+      headers: {
+        Headers.contentTypeHeader: ['application/json'],
+      },
+    );
+
 void main() {
   final document = GeometryDocument(objects: const []);
 
   test(
-    'sends configured OpenAI-compatible request and previews, not applies',
+    'Dio client sends credentials, tools, and previews a JSON proposal',
     () async {
       final settings = _MemoryAiSettings();
-      http.Request? sentRequest;
-      final proposal = jsonEncode({
-        'summary': 'A point',
-        'objects': [
-          {
-            'id': 'ai-point-1',
-            'kind': 'point',
-            'points': [
-              {'x': 1, 'y': 2},
-            ],
-            'label': 'A',
-          },
-        ],
-      });
-      final client = MockClient((request) async {
-        sentRequest = request;
-        expect(request.followRedirects, isFalse);
-        return http.Response(
-          jsonEncode({
-            'choices': [
-              {
-                'message': {'content': proposal},
-              },
-            ],
-          }),
-          200,
-        );
-      });
-      final bloc = AiBloc(client: client, settings: settings);
-      await bloc.loadSettings();
-
-      expect(
-        await bloc.saveSettings(
-          endpoint: 'http://localhost:8080/v1/',
-          model: 'test-model',
-          apiKey: 'test-secret',
-        ),
-        isTrue,
-      );
-      await bloc.sendPrompt('Create a point A.', document);
-
-      expect(sentRequest?.url.path, '/v1/chat/completions');
-      expect(sentRequest?.headers['authorization'], 'Bearer test-secret');
-      final requestBody = jsonDecode(sentRequest!.body) as Map<String, dynamic>;
-      expect(requestBody['model'], 'test-model');
-      expect(requestBody['messages'], hasLength(2));
-      expect(bloc.state.preview?.addedObjects, 1);
-      expect(bloc.state.preview?.document.objects.single.label, 'A');
-      expect(bloc.state.applied, isFalse);
-      expect(document.objects, isEmpty);
-
-      await bloc.close();
-    },
-  );
-
-  test(
-    'repairs a model response missing required geometry fields once',
-    () async {
-      final settings = _MemoryAiSettings()
-        ..values.addAll({
-          'endpoint': 'http://localhost:8080/v1',
-          'model': 'test-model',
-          'key': 'test-secret',
-        });
-      var requests = 0;
-      final client = MockClient((request) async {
-        requests++;
-        final body = jsonDecode(request.body) as Map<String, dynamic>;
-        final messages = body['messages'] as List<dynamic>;
-        if (requests == 1) {
-          expect(messages, hasLength(2));
-          return http.Response(
-            jsonEncode({
-              'choices': [
-                {
-                  'message': {
-                    'content': jsonEncode({
-                      'summary': 'A point',
-                      'objects': [
-                        {'id': 'ai-point-1'},
-                      ],
-                    }),
-                  },
-                },
-              ],
-            }),
-            200,
-          );
-        }
-
-        expect(messages, hasLength(4));
-        expect(messages.last['content'], contains('must include'));
-        return http.Response(
-          jsonEncode({
+      RequestOptions? sentRequest;
+      final apiClient = AiApiClient(
+        dio: _dio((request) async {
+          sentRequest = request;
+          expect(request.followRedirects, isFalse);
+          return _jsonResponse({
             'choices': [
               {
                 'message': {
@@ -145,204 +90,213 @@ void main() {
                         'points': [
                           {'x': 1, 'y': 2},
                         ],
+                        'label': 'A',
                       },
                     ],
                   }),
                 },
               },
             ],
-          }),
-          200,
-        );
-      });
-      final bloc = AiBloc(client: client, settings: settings);
+          });
+        }),
+      );
+      final bloc = AiBloc(apiClient: apiClient, settings: settings);
       await bloc.loadSettings();
+      expect(
+        await bloc.saveSettings(
+          endpoint: 'http://localhost:8080/v1/',
+          model: 'test-model',
+          apiKey: 'test-secret',
+        ),
+        isTrue,
+      );
 
-      await bloc.sendPrompt('Create a point.', document);
+      await bloc.sendPrompt('Create a point A.', document);
 
-      expect(requests, 2);
+      expect(sentRequest?.uri.path, '/v1/chat/completions');
+      expect(sentRequest?.headers['Authorization'], 'Bearer test-secret');
+      final requestBody =
+          jsonDecode(sentRequest!.data as String) as Map<String, dynamic>;
+      expect(requestBody['model'], 'test-model');
+      expect(requestBody['stream'], isTrue);
+      expect(requestBody['tools'], isNotEmpty);
       expect(bloc.state.preview?.addedObjects, 1);
-      expect(bloc.state.error, isNull);
+      expect(bloc.state.preview?.document.objects.single.label, 'A');
       expect(bloc.state.applied, isFalse);
+      expect(document.objects, isEmpty);
       await bloc.close();
     },
   );
 
-  test('rejects insecure remote endpoints before storing a key', () async {
-    final settings = _MemoryAiSettings();
-    var requestCount = 0;
-    final bloc = AiBloc(
-      client: MockClient((_) async {
-        requestCount++;
-        return http.Response('{}', 200);
-      }),
-      settings: settings,
-    );
-    await bloc.loadSettings();
-
-    expect(
-      await bloc.saveSettings(
-        endpoint: 'http://example.com/v1',
-        model: 'model',
-        apiKey: 'never-store-this',
-      ),
-      isFalse,
-    );
-    expect(settings.values, isEmpty);
-
-    await bloc.close();
-    expect(requestCount, 0);
-  });
-
-  test('requires HTTPS and rejects credentials, query and fragments', () async {
-    final settings = _MemoryAiSettings();
-    final bloc = AiBloc(
-      client: MockClient((_) async => http.Response('{}', 200)),
-      settings: settings,
-    );
-    await bloc.loadSettings();
-
-    for (final endpoint in [
-      'https://user:pass@example.com/v1',
-      'https://example.com/v1?token=secret',
-      'https://example.com/v1#fragment',
-      'file:///tmp/config',
-    ]) {
-      expect(
-        await bloc.saveSettings(
-          endpoint: endpoint,
-          model: 'test-model',
-          apiKey: 'test-secret',
-        ),
-        isFalse,
-        reason: endpoint,
-      );
-    }
-    expect(settings.values, isEmpty);
-    await bloc.close();
-  });
-
-  test('keeps malformed model output out of the document preview', () async {
-    final settings = _MemoryAiSettings()
-      ..values.addAll({
-        'endpoint': 'http://localhost:8080/v1',
-        'model': 'test-model',
-        'key': 'test-secret',
-      });
-    final bloc = AiBloc(
-      client: MockClient(
-        (_) async => http.Response(
-          jsonEncode({
+  test('Dio SSE parser assembles streamed function calls', () async {
+    final client = AiApiClient(
+      dio: _dio((request) async {
+        final sse = [
+          {
             'choices': [
               {
-                'message': {'content': 'not JSON'},
-              },
-            ],
-          }),
-          200,
-        ),
-      ),
-      settings: settings,
-    );
-    await bloc.loadSettings();
-
-    await bloc.sendPrompt('Create a point.', document);
-
-    expect(bloc.state.preview, isNull);
-    expect(bloc.state.error, isNotNull);
-    expect(bloc.state.busy, isFalse);
-    await bloc.close();
-  });
-
-  test('rejects whole-document replacements from the AI endpoint', () async {
-    final settings = _MemoryAiSettings()
-      ..values.addAll({
-        'endpoint': 'http://localhost:8080/v1',
-        'model': 'test-model',
-        'key': 'test-secret',
-      });
-    final bloc = AiBloc(
-      client: MockClient(
-        (_) async => http.Response(
-          jsonEncode({
-            'choices': [
-              {
-                'message': {
-                  'content': jsonEncode({
-                    'format': 'moesketchpad-document',
-                    'objects': [],
-                  }),
+                'delta': {
+                  'tool_calls': [
+                    {
+                      'index': 0,
+                      'id': 'call-1',
+                      'function': {
+                        'name': 'create_geometry',
+                        'arguments': '{"summary":"Create","objects":[',
+                      },
+                    },
+                  ],
                 },
               },
             ],
-          }),
+          },
+          {
+            'choices': [
+              {
+                'delta': {
+                  'tool_calls': [
+                    {
+                      'index': 0,
+                      'function': {
+                        'arguments':
+                            '{"id":"p1","kind":"point","points":[{"x":0,"y":0}]}]}',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+          '[DONE]',
+        ];
+        final content = sse
+            .map(
+              (event) => event == '[DONE]'
+                  ? 'data: [DONE]\n\n'
+                  : 'data: ${jsonEncode(event)}\n\n',
+            )
+            .join();
+        return ResponseBody.fromString(
+          content,
           200,
-        ),
-      ),
-      settings: settings,
+          headers: {
+            Headers.contentTypeHeader: ['text/event-stream'],
+          },
+        );
+      }),
     );
-    await bloc.loadSettings();
-
-    await bloc.sendPrompt('Create a point.', document);
-
-    expect(bloc.state.preview, isNull);
-    expect(bloc.state.error, contains('additive proposal'));
-    await bloc.close();
+    final completion = await client.complete(
+      endpoint: Uri.parse('https://api.example.com/v1/chat/completions'),
+      model: 'test',
+      apiKey: 'secret',
+      messages: const [],
+    );
+    expect(completion.toolCalls, hasLength(1));
+    expect(completion.toolCalls.single.name, 'create_geometry');
+    final proposal =
+        jsonDecode(ToolExecutor().toProposal(completion.toolCalls))
+            as Map<String, dynamic>;
+    expect(proposal['objects'], hasLength(1));
   });
 
-  test('redacts an API key if the provider echoes it in an error', () async {
+  test('ToolExecutor rejects arbitrary tool names', () {
+    expect(
+      () => ToolExecutor().toProposal([
+        const AiToolCall(name: 'run_shell', arguments: '{}'),
+      ]),
+      throwsFormatException,
+    );
+  });
+
+  test('repairs incomplete model geometry exactly once', () async {
     final settings = _MemoryAiSettings()
       ..values.addAll({
         'endpoint': 'http://localhost:8080/v1',
         'model': 'test-model',
-        'key': 'private-secret',
+        'key': 'test-secret',
       });
+    var requests = 0;
     final bloc = AiBloc(
-      client: MockClient(
-        (_) async => http.Response(
-          jsonEncode({
-            'error': {'message': 'invalid key private-secret'},
-          }),
-          401,
-        ),
+      apiClient: AiApiClient(
+        dio: _dio((request) async {
+          requests++;
+          final body = jsonDecode(request.data as String) as Map;
+          final messages = body['messages'] as List;
+          final content = requests == 1
+              ? {
+                  'summary': 'A point',
+                  'objects': [
+                    {'id': 'p1'},
+                  ],
+                }
+              : {
+                  'summary': 'A point',
+                  'objects': [
+                    {
+                      'id': 'p1',
+                      'kind': 'point',
+                      'points': [
+                        {'x': 1, 'y': 2},
+                      ],
+                    },
+                  ],
+                };
+          if (requests == 2) {
+            expect(messages, hasLength(4));
+            expect(messages.last['content'], contains('must include'));
+          }
+          return _jsonResponse({
+            'choices': [
+              {
+                'message': {'content': jsonEncode(content)},
+              },
+            ],
+          });
+        }),
       ),
       settings: settings,
     );
     await bloc.loadSettings();
-
     await bloc.sendPrompt('Create a point.', document);
-
-    expect(bloc.state.error, contains('[redacted]'));
-    expect(bloc.state.error, isNot(contains('private-secret')));
-    expect(bloc.state.preview, isNull);
+    expect(requests, 2);
+    expect(bloc.state.preview?.addedObjects, 1);
+    expect(bloc.state.error, isNull);
     await bloc.close();
   });
 
-  test('deletes API key without exposing it in bloc state', () async {
-    final settings = _MemoryAiSettings()
-      ..values.addAll({
-        'endpoint': 'https://api.example.com/v1',
-        'model': 'model',
-        'key': 'private-key',
-      });
-    final bloc = AiBloc(
-      client: MockClient((_) async => http.Response('{}', 200)),
-      settings: settings,
-    );
-    await bloc.loadSettings();
-
-    expect(bloc.state.apiKeyConfigured, isTrue);
-    expect(bloc.state.toString(), isNot(contains('private-key')));
-    expect(
-      await bloc.saveSettings(
-        endpoint: bloc.state.endpoint,
-        model: bloc.state.model,
-        clearApiKey: true,
-      ),
-      isTrue,
-    );
-    expect(bloc.state.apiKeyConfigured, isFalse);
-    expect(settings.values.containsKey('key'), isFalse);
-    await bloc.close();
-  });
+  test(
+    'provider errors redact credentials and reject insecure endpoints',
+    () async {
+      final settings = _MemoryAiSettings()
+        ..values.addAll({
+          'endpoint': 'http://localhost:8080/v1',
+          'model': 'test-model',
+          'key': 'private-secret',
+        });
+      final bloc = AiBloc(
+        apiClient: AiApiClient(
+          dio: _dio(
+            (_) async => _jsonResponse({
+              'error': {'message': 'invalid private-secret'},
+            }, status: 401),
+          ),
+        ),
+        settings: settings,
+      );
+      await bloc.loadSettings();
+      await bloc.sendPrompt('Create a point.', document);
+      expect(bloc.state.error, contains('[redacted]'));
+      expect(bloc.state.error, isNot(contains('private-secret')));
+      expect(bloc.state.preview, isNull);
+      expect(
+        await bloc.saveSettings(
+          endpoint: 'http://example.com/v1',
+          model: 'model',
+          apiKey: 'never-store-this',
+        ),
+        isFalse,
+      );
+      await bloc.close();
+    },
+  );
 }

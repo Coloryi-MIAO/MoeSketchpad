@@ -16,7 +16,8 @@ dependencies:
     sdk: flutter
   flutter_secure_storage: ^9.2.4
   flutter_bloc: ^9.1.1
-  http: ^1.5.0
+  dio: ^5.8.0
+  image: ^4.5.4
   intl: ^0.20.3
   file_selector: ^1.1.0
   screen_retriever: ^0.2.2

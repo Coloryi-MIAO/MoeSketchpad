@@ -238,6 +238,39 @@ class GeometryObject {
   /// Finite bounds for R-tree entries, or `null` for unbounded geometry.
   Bounds2? get bounds {
     if (!isBounded) return null;
+    if (kind == GeometryKind.circle && points.length >= 2) {
+      final center = points.first;
+      final radius = center.distanceTo(points[1]);
+      return Bounds2(
+        center.x - radius,
+        center.y - radius,
+        center.x + radius,
+        center.y + radius,
+      );
+    }
+    if (kind == GeometryKind.conic &&
+        params['conicType'] == 'ellipse' &&
+        points.isNotEmpty) {
+      final center = points.first;
+      final a = (params['a'] as num?)?.toDouble() ?? 0;
+      final b = (params['b'] as num?)?.toDouble() ?? 0;
+      final radians =
+          ((params['rotation'] as num?)?.toDouble() ?? 0) * math.pi / 180;
+      final extentX = math.sqrt(
+        a * a * math.cos(radians) * math.cos(radians) +
+            b * b * math.sin(radians) * math.sin(radians),
+      );
+      final extentY = math.sqrt(
+        a * a * math.sin(radians) * math.sin(radians) +
+            b * b * math.cos(radians) * math.cos(radians),
+      );
+      return Bounds2(
+        center.x - extentX,
+        center.y - extentY,
+        center.x + extentX,
+        center.y + extentY,
+      );
+    }
     return Bounds2.fromPoints(points);
   }
 
@@ -480,7 +513,9 @@ enum ConstraintType {
   perpendicular,
   equalLength,
   angle,
-  tangent;
+  tangent,
+  tangentLineCircle,
+  tangentCircleCircle;
 
   static ConstraintType parse(String value) {
     for (final type in values) {
@@ -1057,10 +1092,40 @@ class GeometryDocument {
           throw FormatException('Constraint "${constraint.id}" needs a value.');
         }
       }
-      if (constraint.type == ConstraintType.tangent) {
-        throw const FormatException(
-          'Tangent constraint is reserved and not yet solvable in this build.',
-        );
+      if (constraint.type == ConstraintType.tangent ||
+          constraint.type == ConstraintType.tangentLineCircle) {
+        if (constraint.targetIds.length != 2) {
+          throw FormatException(
+            'Tangent constraint "${constraint.id}" needs two objects.',
+          );
+        }
+        final first = objectById(constraint.targetIds[0])!;
+        final second = objectById(constraint.targetIds[1])!;
+        final validLine = (GeometryObject object) =>
+            (object.kind == GeometryKind.line ||
+                object.kind == GeometryKind.segment ||
+                object.kind == GeometryKind.ray) &&
+            object.points.length >= 2;
+        final validCircle = (GeometryObject object) =>
+            object.kind == GeometryKind.circle && object.points.length >= 2;
+        if (!((validLine(first) && validCircle(second)) ||
+            (validCircle(first) && validLine(second)))) {
+          throw FormatException(
+            'Tangent constraint "${constraint.id}" needs a line and circle.',
+          );
+        }
+      }
+      if (constraint.type == ConstraintType.tangentCircleCircle) {
+        if (constraint.targetIds.length != 2 ||
+            constraint.targetIds.any((id) {
+              final target = objectById(id)!;
+              return target.kind != GeometryKind.circle ||
+                  target.points.length < 2;
+            })) {
+          throw FormatException(
+            'Tangent constraint "${constraint.id}" needs two circles.',
+          );
+        }
       }
     }
     for (final measurement in measurements) {

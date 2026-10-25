@@ -1085,7 +1085,7 @@ abstract class AppLocalizations {
   /// No description provided for @exportPage.
   ///
   /// In zh, this message translates to:
-  /// **'导出页面 SVG'**
+  /// **'导出当前视口 SVG'**
   String get exportPage;
 
   /// No description provided for @visibility.

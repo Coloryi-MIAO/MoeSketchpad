@@ -527,7 +527,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get fitView => '适合窗口';
 
   @override
-  String get exportPage => '导出页面 SVG';
+  String get exportPage => '导出当前视口 SVG';
 
   @override
   String get visibility => '可见性';
