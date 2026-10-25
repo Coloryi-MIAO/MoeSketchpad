@@ -247,8 +247,8 @@ MaterialApp(locale, theme)
   CLI 支持 `--auto`、上下标/大小写/Greek 简写。
 - 测量：UI/CLI 都通过 `MeasurementEngine` 计算；附着目标 ID，几何变化后重新
   计算；支持单位/精度。测量标签在画布与泊坞窗显示。
-- 导出动图：桌面和 Web UI 可导出 GIF（基本几何对象栅格化；尺寸/帧数受限）。
-  CLI 动图、APNG、MP4 未实现。SVG/JSON 通过 CLI 导出；SVG 当前
+- 导出动图：桌面和 Web UI 可导出 GIF/APNG，CLI 可导出 GIF（基本几何对象
+  栅格化；尺寸/帧数受限）。CLI APNG、MP4 未实现。SVG/JSON 通过 CLI 导出；SVG 当前
   支持点/线/圆/弧/多边形/椭圆等基本对象，复杂圆锥/函数的 SVG 仍需完善。
 
 ## 8. AI 默认系统提示词（全文）
