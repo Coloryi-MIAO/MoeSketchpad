@@ -6,6 +6,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+import 'package:window_manager/window_manager.dart';
 
 import 'package:moesketchpad_installer/package_archive.dart';
 
@@ -72,10 +73,13 @@ class _InstallerPageState extends State<InstallerPage> {
   bool _desktopShortcut = true;
   bool _startMenuShortcut = true;
   bool _launchAfterInstall = true;
+  String _selectedLanguage = 'zh'; // zh or en
+  String? _selectedMoespPath;
 
   @override
   void initState() {
     super.initState();
+    _setupWindow();
     _path = TextEditingController(
       text:
           widget.installDir ??
@@ -87,6 +91,17 @@ class _InstallerPageState extends State<InstallerPage> {
             'MoeSketchpad',
           ),
     );
+  }
+
+  Future<void> _setupWindow() async {
+    try {
+      await WindowManager.instance.setWindowTitleBarVisibility(false);
+      await WindowManager.instance.setFullScreen(true);
+      await WindowManager.instance.setResizable(false);
+      await WindowManager.instance.setWindowSize(const Size(600, 700));
+    } on Object {
+      // WindowManager may not be available on all platforms
+    }
   }
 
   @override
@@ -463,6 +478,38 @@ class _InstallerPageState extends State<InstallerPage> {
           border: OutlineInputBorder(),
           isDense: true,
         ),
+      ),
+      const SizedBox(height: 16),
+      DropdownButtonFormField<String>(
+        value: _selectedLanguage,
+        decoration: const InputDecoration(
+          labelText: 'Language',
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        items: const [
+          DropdownMenuItem(value: 'zh', child: Text('简体中文')),
+          DropdownMenuItem(value: 'en', child: Text('English')),
+        ],
+        onChanged: (value) {
+          if (value != null) setState(() => _selectedLanguage = value);
+        },
+      ),
+      const SizedBox(height: 16),
+      DropdownButtonFormField<String>(
+        value: _selectedMoespPath,
+        decoration: const InputDecoration(
+          labelText: 'moesp command location',
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        items: const [
+          DropdownMenuItem(value: 'auto', child: Text('Auto-register (recommended)')),
+          DropdownMenuItem(value: 'manual', child: Text('Manually specify path')),
+        ],
+        onChanged: (value) {
+          if (value != null) setState(() => _selectedMoespPath = value);
+        },
       ),
       const SizedBox(height: 16),
       _option('Create a desktop shortcut', _desktopShortcut, (v) {
