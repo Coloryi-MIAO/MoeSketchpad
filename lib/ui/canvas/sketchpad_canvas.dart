@@ -16,6 +16,7 @@ import '../../bloc/theme_bloc.dart';
 import '../../bloc/tool_bloc.dart';
 import '../../l10n/app_localizations.dart';
 import 'canvas_painters.dart';
+import 'geometry_construction.dart';
 
 class SketchpadCanvas extends StatefulWidget {
   const SketchpadCanvas({super.key});
@@ -236,6 +237,8 @@ class SketchpadCanvasState extends State<SketchpadCanvas> {
         );
       case MoeTool.segment:
       case MoeTool.line:
+      case MoeTool.ray:
+      case MoeTool.vector:
         _draftPoints.add(snapped);
         if (_draftPoints.length == 2) {
           if (_isDegeneratePair(_draftPoints[0], _draftPoints[1], canvas)) {
@@ -244,16 +247,46 @@ class SketchpadCanvasState extends State<SketchpadCanvas> {
             setState(() {});
             return;
           }
-          final kind = tool == MoeTool.segment
-              ? GeometryKind.segment
-              : GeometryKind.line;
+          final kind = switch (tool) {
+            MoeTool.segment => GeometryKind.segment,
+            MoeTool.line => GeometryKind.line,
+            MoeTool.ray => GeometryKind.ray,
+            MoeTool.vector => GeometryKind.vector,
+            _ => throw StateError('Unexpected two-point construction tool.'),
+          };
           _addObject(
-            GeometryObject(
+            GeometryConstruction.twoPoint(
               id: '${kind.name}-${DateTime.now().microsecondsSinceEpoch}',
               kind: kind,
-              points: List.of(_draftPoints),
+              first: _draftPoints[0],
+              second: _draftPoints[1],
             ),
           );
+          _draftPoints.clear();
+        }
+        setState(() {});
+      case MoeTool.arc:
+        _draftPoints.add(snapped);
+        if (_draftPoints.length == 3) {
+          final tolerance = canvas.geometryTolerance.forScale(
+            _draftPoints[0].length,
+          );
+          try {
+            _addObject(
+              GeometryConstruction.arc(
+                id: 'arc-${DateTime.now().microsecondsSinceEpoch}',
+                center: _draftPoints[0],
+                start: _draftPoints[1],
+                endDirection: _draftPoints[2],
+                tolerance: tolerance,
+              ),
+            );
+          } on FormatException {
+            _draftPoints.clear();
+            _showDegenerateGeometry();
+            setState(() {});
+            return;
+          }
           _draftPoints.clear();
         }
         setState(() {});

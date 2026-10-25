@@ -111,7 +111,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get toolLine => '直线';
 
   @override
+  String get toolRay => '射线';
+
+  @override
+  String get toolVector => '向量';
+
+  @override
   String get toolCircle => '圆';
+
+  @override
+  String get toolArc => '圆弧';
 
   @override
   String get toolTriangle => '三角形';
@@ -233,7 +242,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get statusToolHintLine => '依次点击直线上的两点。';
 
   @override
+  String get statusToolHintRay => '先点击射线起点，再点击确定方向的点。';
+
+  @override
+  String get statusToolHintVector => '依次点击向量起点和终点。';
+
+  @override
   String get statusToolHintCircle => '先点圆心，再点圆周。';
+
+  @override
+  String get statusToolHintArc => '依次点击圆心、圆弧起点和终点。';
 
   @override
   String get statusToolHintTriangle => '依次点击三角形的三个顶点。';

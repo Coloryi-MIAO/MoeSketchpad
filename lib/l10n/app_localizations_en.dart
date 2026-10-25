@@ -112,7 +112,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolLine => 'Line';
 
   @override
+  String get toolRay => 'Ray';
+
+  @override
+  String get toolVector => 'Vector';
+
+  @override
   String get toolCircle => 'Circle';
+
+  @override
+  String get toolArc => 'Arc';
 
   @override
   String get toolTriangle => 'Triangle';
@@ -235,8 +244,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusToolHintLine => 'Click two points on the line.';
 
   @override
+  String get statusToolHintRay =>
+      'Click the ray origin, then a point to set its direction.';
+
+  @override
+  String get statusToolHintVector => 'Click the vector start, then its end.';
+
+  @override
   String get statusToolHintCircle =>
       'Click the center, then a point on the circle.';
+
+  @override
+  String get statusToolHintArc =>
+      'Click the center, start point, then end point on the arc.';
 
   @override
   String get statusToolHintTriangle => 'Click the three vertices.';

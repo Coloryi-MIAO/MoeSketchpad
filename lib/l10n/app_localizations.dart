@@ -302,11 +302,29 @@ abstract class AppLocalizations {
   /// **'直线'**
   String get toolLine;
 
+  /// No description provided for @toolRay.
+  ///
+  /// In zh, this message translates to:
+  /// **'射线'**
+  String get toolRay;
+
+  /// No description provided for @toolVector.
+  ///
+  /// In zh, this message translates to:
+  /// **'向量'**
+  String get toolVector;
+
   /// No description provided for @toolCircle.
   ///
   /// In zh, this message translates to:
   /// **'圆'**
   String get toolCircle;
+
+  /// No description provided for @toolArc.
+  ///
+  /// In zh, this message translates to:
+  /// **'圆弧'**
+  String get toolArc;
 
   /// No description provided for @toolTriangle.
   ///
@@ -530,11 +548,29 @@ abstract class AppLocalizations {
   /// **'依次点击直线上的两点。'**
   String get statusToolHintLine;
 
+  /// No description provided for @statusToolHintRay.
+  ///
+  /// In zh, this message translates to:
+  /// **'先点击射线起点，再点击确定方向的点。'**
+  String get statusToolHintRay;
+
+  /// No description provided for @statusToolHintVector.
+  ///
+  /// In zh, this message translates to:
+  /// **'依次点击向量起点和终点。'**
+  String get statusToolHintVector;
+
   /// No description provided for @statusToolHintCircle.
   ///
   /// In zh, this message translates to:
   /// **'先点圆心，再点圆周。'**
   String get statusToolHintCircle;
+
+  /// No description provided for @statusToolHintArc.
+  ///
+  /// In zh, this message translates to:
+  /// **'依次点击圆心、圆弧起点和终点。'**
+  String get statusToolHintArc;
 
   /// No description provided for @statusToolHintTriangle.
   ///

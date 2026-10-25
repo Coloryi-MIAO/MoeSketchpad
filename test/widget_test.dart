@@ -126,6 +126,29 @@ void main() {
     expect(rectangle.points, hasLength(4));
     expect(rectangle.style.fillColor, isNull);
 
+    await tester.tap(find.byKey(const ValueKey('top-tool-ray')));
+    await tester.pump();
+    expect(
+      tester
+          .element(find.byKey(const ValueKey('geometry-unit')))
+          .read<ToolBloc>()
+          .state
+          .active,
+      MoeTool.ray,
+    );
+    await tester.tap(find.byKey(const ValueKey('top-tool-vector')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('top-tool-arc')));
+    await tester.pump();
+    expect(
+      tester
+          .element(find.byKey(const ValueKey('geometry-unit')))
+          .read<ToolBloc>()
+          .state
+          .active,
+      MoeTool.arc,
+    );
+
     await tester.binding.setSurfaceSize(const Size(720, 704));
     await tester.pumpAndSettle();
     expect(find.text('文件(F)'), findsOneWidget);

@@ -37,7 +37,8 @@ SetupIconFile=..\..\assets\if.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+; Inno Setup's hosted Windows runner does not ship the Chinese .isl file.
+; The installed application provides the full Chinese and English UI.
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
