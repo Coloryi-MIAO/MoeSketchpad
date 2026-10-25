@@ -63,7 +63,7 @@ class AiApiClient {
           responseType: ResponseType.stream,
           followRedirects: false,
           headers: {
-            'Authorization': 'Bearer $apiKey',
+            'Authorization': 'Bearer ${apiKey.trim()}',
             'Content-Type': 'application/json',
             'Accept': 'text/event-stream, application/json',
           },

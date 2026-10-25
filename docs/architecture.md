@@ -80,8 +80,9 @@ COPYING / NOTICE / SOURCE-AVAILABILITY.txt
 - `MspCodec` API：`encode` / `decode` / `validate` / `migrate` /
   `exportJson` / `importJson`。`validate` 只校验结构与头部，不声称认证；
   `decode` 成功才表示 GCM 认证通过。
-- 密钥：只实现了用户密码 → Argon2id(32B) → AES-256-GCM。**设备钥匙串/系统
-  密钥包装未实现**，不会硬编码密钥。Web 无可靠设备密钥，只支持密码。
+- 密钥：用户密码或随机设备密钥 → Argon2id(32B) → AES-256-GCM。桌面和 Web
+  用 `flutter_secure_storage` 存储设备密钥；不在文件中嵌入密钥，也不硬编码默认
+  密码。设备密钥模式不提供跨设备解密能力。
 - 错误处理：错误密码与 GCM 失败使用同一通用信息；不输出密钥或明文片段。
   魔数、版本、KDF、长度在 KDF/分配前校验。写入 CLI 使用临时文件+备份替换。
 - MIME：`application/x-moesketchpad`；扩展名 `.moesp`；macOS UTI
@@ -145,9 +146,12 @@ stderr。约束命令在求解未收敛时返回 5，且不写文件。
 只读、只接受 `.moesp`、大小限制；审计日志仅记录时间/工具/成功，不含文档或密码。
 AI 面向的 CLI 不执行任意 shell，工具参数按白名单结构化校验。
 
-已实现线-圆切线和圆-圆外切约束；圆-圆内切尚未支持。Flutter 桌面/Web 支持
+已实现线-圆切线和圆-圆外切/内切约束。Flutter 桌面/Web 支持
 基本几何对象的 GIF 动画导出；CLI 动图、APNG、MP4 未实现。导出当前视口的
-SVG 已支持。设备密钥、系统字体枚举等见平台限制。
+SVG 已支持。CLI `constraint` 支持 `tangent-line-circle` 与
+`tangent-circle-circle`，后者可加 `--internal`。右侧命令面板只接受受限的安全
+子集：help、calc、point/segment/circle 创建、label、measure 及相切约束；
+不会启动 shell，也不会执行任意系统命令。所有参数按命令类型白名单检查。
 
 ## 4. 几何内核与函数解析
 
@@ -165,7 +169,8 @@ SVG 已支持。设备密钥、系统字体枚举等见平台限制。
 - 约束：阻尼最小二乘 + 有限差分 Jacobian + 高斯消元；支持 coincident,
   distance, horizontal, vertical, pointOnLine, pointOnCircle, parallel,
   perpendicular, equalLength, angle, tangentLineCircle, tangentCircleCircle
-  （外切）。报告 converged/iterations/residual；不收敛时调用方不得提交。
+  （外切或通过 `internalTangency` 选择内切）。报告 converged/iterations/
+  residual；不收敛时调用方不得提交。
 - 测量：length/arcLength/angle/area/slope/functionValue；单位 unitless、
   cm、mm、px、custom；cm/mm 使用文档 `ViewState.unitScaleMm`（默认 96dpi）。
 - 函数：不可变 AST（number/variable/unary/binary/call），长度 4096、节点 2048、
@@ -370,15 +375,17 @@ COPYING/NOTICE 全文入口。
 
 后续里程碑（Copilot 任务见 `copanddsh.txt`）：
 
-1. 内核加固：更多 fuzz/性质测试、圆-圆内切、约束完整性与性能基准。
+1. 内核加固：更多 fuzz/性质测试、约束完整性与性能基准。
 2. Canvas：10 万对象、增量索引、笔迹/文本工具与性能剖析。
 3. 文档：系统字体枚举（原生）、设备钥匙串、多窗口。
 4. 导出：完整 SVG、PNG/PDF、CLI GIF/APNG/MP4。
 5. AI/MCP：更多供应商协议适配、工具 schema 版本化、审计轮转、MCP 客户端传输。
 6. 发布：签名/公证、安装器 CI、完整 NOTICE 生成、macOS UTI 实机验证。
 
-平台限制（明确）：Web 无本地字体枚举、任意路径文件系统、进程调用、设备密钥；
-桌面设备密钥与系统字体枚举未实现；APNG/MP4 与 CLI 动图导出未实现；固定默认
-密码不会启用，因为所有人共享固定密码会破坏加密保护；设备文件关联的 macOS 侧
+平台限制（明确）：Web 无本地字体枚举、任意路径文件系统、进程调用；桌面系统
+字体枚举未实现；APNG/MP4 与 CLI 动图导出未实现。免密码保存会使用每安装随机
+生成并交由 `flutter_secure_storage` 保存的设备密钥，不使用共享固定默认密码；
+文件依赖原设备密钥，不保证跨设备打开，Web 端保护能力取决于浏览器本地安全存储。
+设备文件关联的 macOS 侧
 当前 AI 直接请求依赖端点兼容 Chat Completions；Web 受 CORS/浏览器安全存储限制；
 不声称 60fps/全部原始需求功能均已实现。

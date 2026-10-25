@@ -112,6 +112,8 @@
   "passwordOpenLabel": "输入 .moesp 文档密码",
   "passwordSaveLabel": "为 .moesp 文档设置密码（不能为空）",
   "passwordTooShort": "密码不能为空。",
+  "passwordUseDeviceKey": "使用设备生成密钥（无需输入密码）",
+  "passwordDeviceKeyNotice": "密钥保存在本机；文件可能无法在其他设备打开。网页版保护程度取决于浏览器存储安全。",
   "openFailed": "无法打开文档：{error}",
   "saveFailed": "无法保存文档：{error}",
   "invalidPassword": "密码错误或文件已被篡改。",

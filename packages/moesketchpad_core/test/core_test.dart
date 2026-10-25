@@ -225,7 +225,11 @@ void main() {
 
       final result = const ConstraintSolver().solve(document);
       final circle = result.document.objectById('circle')!;
-      expect(result.converged, isTrue);
+      expect(
+        result.converged,
+        isTrue,
+        reason: '${result.residual}: ${result.message}',
+      );
       expect(
         (circle.points.first.y -
                 circle.points.first.distanceTo(circle.points[1]))
@@ -267,6 +271,55 @@ void main() {
       expect(
         second.points.first.distanceTo(first.points.first),
         closeTo(radiusA + radiusB, 1e-7),
+      );
+    });
+
+    test('solves internal circle-circle tangency', () {
+      final document = GeometryDocument(
+        objects: const [
+          GeometryObject(
+            id: 'outer',
+            kind: GeometryKind.circle,
+            points: [Point2(0, 0), Point2(3, 0)],
+            params: {'fixed': true},
+          ),
+          GeometryObject(
+            id: 'inner',
+            kind: GeometryKind.circle,
+            points: [Point2(4, 0), Point2(5, 0)],
+          ),
+        ],
+        constraints: const [
+          Constraint(
+            id: 'inside-tangent',
+            type: ConstraintType.tangentCircleCircle,
+            targetIds: ['outer', 'inner'],
+            internalTangency: true,
+          ),
+        ],
+      );
+
+      final result = const ConstraintSolver().solve(document);
+      final outer = result.document.objectById('outer')!;
+      final inner = result.document.objectById('inner')!;
+      expect(
+        result.converged,
+        isTrue,
+        reason: '${result.residual}: ${result.message}',
+      );
+      expect(
+        inner.points.first.distanceTo(outer.points.first),
+        closeTo(
+          outer.points.first.distanceTo(outer.points[1]) -
+              inner.points.first.distanceTo(inner.points[1]),
+          1e-7,
+        ),
+      );
+      expect(
+        GeometryDocument.fromJson(
+          result.document.toJson(),
+        ).constraints.single.internalTangency,
+        isTrue,
       );
     });
   });

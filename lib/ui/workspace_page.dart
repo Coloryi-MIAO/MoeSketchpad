@@ -20,10 +20,12 @@ import '../bloc/tool_bloc.dart';
 import '../build_info.dart';
 import '../l10n/app_localizations.dart';
 import '../platform/close_guard.dart';
+import '../platform/device_document_key_store.dart';
 import '../platform/document_file_name.dart';
 import '../platform/file_service.dart';
 import '../platform/recent_files_store.dart';
 import '../services/animated_gif_exporter.dart';
+import '../services/document_command_executor.dart';
 import 'canvas/sketchpad_canvas.dart';
 import 'dialogs/about_dialog.dart';
 import 'dialogs/password_dialog.dart';
@@ -36,6 +38,23 @@ class WorkspacePage extends StatefulWidget {
 
   @override
   State<WorkspacePage> createState() => _WorkspacePageState();
+}
+
+Future<String> _resolvePasswordChoice(
+  PasswordChoice choice, {
+  required bool saving,
+}) async {
+  if (!choice.useDeviceKey) return choice.password;
+  const keyStore = DeviceDocumentKeyStore();
+  if (saving) return keyStore.readOrCreate();
+  final key = await keyStore.read();
+  if (key == null) {
+    throw StateError(
+      'No device key is stored here. Open the document with its password '
+      'or on the device where it was created.',
+    );
+  }
+  return key;
 }
 
 class _WorkspacePageState extends State<WorkspacePage> {
@@ -175,13 +194,14 @@ class _WorkspacePageState extends State<WorkspacePage> {
       ),
     );
     if (selected == null || !mounted) return;
-    final password = await showPasswordDialog(
+    final choice = await showPasswordDialog(
       context,
       saving: false,
       fileName: 'Draft ${selected.key}',
     );
-    if (password == null || !mounted) return;
+    if (choice == null || !mounted) return;
     try {
+      final password = await _resolvePasswordChoice(choice, saving: false);
       final document = await MspCodec().decode(
         selected.bytes,
         password: password,
@@ -285,13 +305,14 @@ class _WorkspacePageState extends State<WorkspacePage> {
     final webFileName = kIsWeb ? await _requestWebFileName(tab, l10n) : null;
     if (!mounted) return false;
     if (kIsWeb && webFileName == null) return false;
-    final password = await showPasswordDialog(
+    final choice = await showPasswordDialog(
       context,
       saving: true,
       fileName: webFileName ?? _tabName(l10n, tab),
     );
-    if (password == null) return false;
+    if (choice == null) return false;
     try {
+      final password = await _resolvePasswordChoice(choice, saving: true);
       final view = canvasBloc.toViewState();
       final document = documentBloc.documentForSave(view);
       final bytes = await MspCodec().encode(
@@ -406,13 +427,14 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
   Future<void> _openPicked(PickedFile picked) async {
     final l10n = AppLocalizations.of(context);
-    final password = await showPasswordDialog(
+    final choice = await showPasswordDialog(
       context,
       saving: false,
       fileName: picked.name,
     );
-    if (password == null) return;
+    if (choice == null) return;
     try {
+      final password = await _resolvePasswordChoice(choice, saving: false);
       final document = await MspCodec().decode(
         picked.bytes,
         password: password,
@@ -607,6 +629,17 @@ class _WorkspacePageState extends State<WorkspacePage> {
     context.read<SelectionBloc>().clear();
     context.read<MeasureBloc>().refresh(preview);
     context.read<AnimationBloc>().reset();
+  }
+
+  Future<String> _runDocumentCommand(String command) async {
+    final documentBloc = context.read<DocumentBloc>();
+    final current = documentBloc.state.active.document;
+    final result = const DocumentCommandExecutor().execute(command, current);
+    if (!identical(result.document, current)) {
+      documentBloc.commitDocument(result.document);
+      context.read<MeasureBloc>().refresh(result.document);
+    }
+    return result.message;
   }
 
   void _onMenuAction(String action) {
@@ -1013,6 +1046,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                           onAddMeasurement: _addMeasurement,
                           onAddAnimation: _addAnimation,
                           onApplyAi: _applyAi,
+                          onRunCommand: _runDocumentCommand,
                         ),
                       ],
                     ),

@@ -531,18 +531,21 @@ class Constraint {
     required this.type,
     required this.targetIds,
     this.value,
+    this.internalTangency = false,
   });
 
   final String id;
   final ConstraintType type;
   final List<String> targetIds;
   final double? value;
+  final bool internalTangency;
 
   Map<String, Object?> toJson() => {
     'id': id,
     'type': type.name,
     'targetIds': targetIds,
     if (value != null) 'value': value,
+    if (internalTangency) 'internalTangency': true,
   };
 
   factory Constraint.fromJson(Object? value) {
@@ -565,6 +568,7 @@ class Constraint {
       type: ConstraintType.parse(type),
       targetIds: targets.cast<String>(),
       value: numericValue is num ? numericValue.toDouble() : null,
+      internalTangency: value['internalTangency'] == true,
     );
   }
 }

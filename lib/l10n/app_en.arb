@@ -112,6 +112,8 @@
   "passwordOpenLabel": "Enter the .moesp document password",
   "passwordSaveLabel": "Set a non-empty password for the .moesp document",
   "passwordTooShort": "Password must not be empty.",
+  "passwordUseDeviceKey": "Use a generated device key (no password)",
+  "passwordDeviceKeyNotice": "This key is stored on this device. The file may not open on another device; Web storage depends on browser security.",
   "openFailed": "Could not open document: {error}",
   "saveFailed": "Could not save document: {error}",
   "invalidPassword": "Incorrect password or the file has been tampered with.",

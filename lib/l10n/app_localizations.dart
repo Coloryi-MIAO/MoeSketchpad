@@ -770,6 +770,18 @@ abstract class AppLocalizations {
   /// **'密码不能为空。'**
   String get passwordTooShort;
 
+  /// No description provided for @passwordUseDeviceKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'使用设备生成密钥（无需输入密码）'**
+  String get passwordUseDeviceKey;
+
+  /// No description provided for @passwordDeviceKeyNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'密钥保存在本机；文件可能无法在其他设备打开。网页版保护程度取决于浏览器存储安全。'**
+  String get passwordDeviceKeyNotice;
+
   /// No description provided for @openFailed.
   ///
   /// In zh, this message translates to:

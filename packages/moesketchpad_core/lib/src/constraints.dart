@@ -319,9 +319,10 @@ class _ResidualEvaluator {
           final second = _objectPoints(targets[1], positions);
           final firstRadius = first[0].distanceTo(first[1]);
           final secondRadius = second[0].distanceTo(second[1]);
-          result.add(
-            first[0].distanceTo(second[0]) - firstRadius - secondRadius,
-          );
+          final tangentDistance = constraint.internalTangency
+              ? (firstRadius - secondRadius).abs()
+              : firstRadius + secondRadius;
+          result.add(first[0].distanceTo(second[0]) - tangentDistance);
       }
     }
     return result;

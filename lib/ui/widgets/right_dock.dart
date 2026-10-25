@@ -21,6 +21,7 @@ class RightDock extends StatefulWidget {
     required this.onAddMeasurement,
     required this.onAddAnimation,
     required this.onApplyAi,
+    required this.onRunCommand,
   });
 
   final bool cute;
@@ -29,6 +30,7 @@ class RightDock extends StatefulWidget {
   final void Function(MeasurementType type) onAddMeasurement;
   final VoidCallback onAddAnimation;
   final void Function(GeometryDocument preview) onApplyAi;
+  final Future<String> Function(String command) onRunCommand;
 
   @override
   State<RightDock> createState() => _RightDockState();
@@ -41,9 +43,12 @@ class _RightDockState extends State<RightDock> {
   );
   final TextEditingController _aiModel = TextEditingController();
   final TextEditingController _aiApiKey = TextEditingController();
+  final TextEditingController _commandInput = TextEditingController();
   bool _aiConfigEdited = false;
   bool _aiControllersInitialized = false;
   bool _showAiApiKey = false;
+  bool _commandBusy = false;
+  String? _commandOutput;
   MeasurementType _measureType = MeasurementType.length;
 
   @override
@@ -52,6 +57,7 @@ class _RightDockState extends State<RightDock> {
     _aiEndpoint.dispose();
     _aiModel.dispose();
     _aiApiKey.dispose();
+    _commandInput.dispose();
     super.dispose();
   }
 
@@ -162,6 +168,7 @@ class _RightDockState extends State<RightDock> {
                   _propertiesSection(l10n),
                   _measureSection(l10n),
                   _animationSection(l10n),
+                  _commandSection(),
                   _aiSection(l10n),
                 ],
               ),
@@ -170,6 +177,92 @@ class _RightDockState extends State<RightDock> {
         ],
       ),
     );
+  }
+
+  Widget _commandSection() {
+    final isChinese = Localizations.localeOf(context).languageCode == 'zh';
+    return _DockSection(
+      title: isChinese ? '命令行' : 'Command line',
+      icon: Icons.terminal,
+      cute: widget.cute,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(9, 4, 9, 9),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              isChinese
+                  ? '安全命令子集：moesp help / calc / create / label / measure / constraint。不会执行系统命令。'
+                  : 'Safe subset: moesp help / calc / create / label / measure / constraint. No system commands are run.',
+              style: const TextStyle(fontSize: 9.5, color: Color(0xff667789)),
+            ),
+            const SizedBox(height: 5),
+            TextField(
+              key: const ValueKey('document-command-input'),
+              controller: _commandInput,
+              maxLines: 2,
+              minLines: 1,
+              onSubmitted: (_) => _executeCommand(isChinese),
+              style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace'),
+              decoration: InputDecoration(
+                hintText: 'moesp create point --x=1 --y=2 --label=A',
+                isDense: true,
+                border: const OutlineInputBorder(),
+                contentPadding: const EdgeInsets.all(8),
+                suffixIcon: IconButton(
+                  key: const ValueKey('document-command-run'),
+                  tooltip: isChinese ? '运行命令' : 'Run command',
+                  onPressed: _commandBusy
+                      ? null
+                      : () => _executeCommand(isChinese),
+                  icon: _commandBusy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.play_arrow, size: 18),
+                ),
+              ),
+            ),
+            if (_commandOutput case final output?) ...[
+              const SizedBox(height: 5),
+              SelectableText(
+                output,
+                key: const ValueKey('document-command-output'),
+                style: TextStyle(
+                  fontSize: 10,
+                  color: output.startsWith('Error:')
+                      ? const Color(0xffa63232)
+                      : const Color(0xff315b43),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _executeCommand(bool isChinese) async {
+    final command = _commandInput.text.trim();
+    if (command.isEmpty || _commandBusy) return;
+    setState(() {
+      _commandBusy = true;
+      _commandOutput = null;
+    });
+    try {
+      final output = await widget.onRunCommand(command);
+      if (mounted) setState(() => _commandOutput = output);
+    } on Object catch (error) {
+      if (mounted) {
+        setState(
+          () => _commandOutput = '${isChinese ? '错误' : 'Error'}: $error',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _commandBusy = false);
+    }
   }
 
   Widget _geometrySection(AppLocalizations l10n) {

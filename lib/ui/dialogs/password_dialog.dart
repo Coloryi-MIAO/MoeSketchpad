@@ -3,12 +3,19 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 
-Future<String?> showPasswordDialog(
+class PasswordChoice {
+  const PasswordChoice({this.password = '', this.useDeviceKey = false});
+
+  final String password;
+  final bool useDeviceKey;
+}
+
+Future<PasswordChoice?> showPasswordDialog(
   BuildContext context, {
   required bool saving,
   required String fileName,
 }) {
-  return showDialog<String>(
+  return showDialog<PasswordChoice>(
     context: context,
     barrierDismissible: false,
     builder: (_) => _PasswordDialog(saving: saving, fileName: fileName),
@@ -27,6 +34,7 @@ class _PasswordDialog extends StatefulWidget {
 class _PasswordDialogState extends State<_PasswordDialog> {
   final TextEditingController _controller = TextEditingController();
   bool _obscure = true;
+  bool _useDeviceKey = false;
   String? _error;
 
   @override
@@ -37,11 +45,13 @@ class _PasswordDialogState extends State<_PasswordDialog> {
 
   void _submit() {
     final l10n = AppLocalizations.of(context);
-    if (_controller.text.isEmpty) {
+    if (!_useDeviceKey && _controller.text.isEmpty) {
       setState(() => _error = l10n.passwordTooShort);
       return;
     }
-    Navigator.of(context).pop(_controller.text);
+    Navigator.of(context).pop(
+      PasswordChoice(password: _controller.text, useDeviceKey: _useDeviceKey),
+    );
   }
 
   @override
@@ -64,6 +74,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
               autofocus: true,
               controller: _controller,
               obscureText: _obscure,
+              enabled: !_useDeviceKey,
               onSubmitted: (_) => _submit(),
               decoration: InputDecoration(
                 labelText: widget.saving
@@ -79,6 +90,16 @@ class _PasswordDialogState extends State<_PasswordDialog> {
                   ),
                 ),
               ),
+            ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: _useDeviceKey,
+              onChanged: (value) =>
+                  setState(() => _useDeviceKey = value ?? false),
+              title: Text(l10n.passwordUseDeviceKey),
+              subtitle: Text(l10n.passwordDeviceKeyNotice),
+              controlAffinity: ListTileControlAffinity.leading,
             ),
             const SizedBox(height: 8),
             Text(

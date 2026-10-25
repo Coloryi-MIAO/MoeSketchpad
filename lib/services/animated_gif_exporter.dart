@@ -138,6 +138,82 @@ class AnimatedGifExporter {
         } on FormatException {
           return;
         }
+      case GeometryKind.conic:
+        if (object.params['conicType'] == 'ellipse' &&
+            object.points.isNotEmpty) {
+          final center = object.points.first;
+          final a = (object.params['a'] as num?)?.toDouble() ?? 0;
+          final b = (object.params['b'] as num?)?.toDouble() ?? 0;
+          final rotation =
+              ((object.params['rotation'] as num?)?.toDouble() ?? 0) *
+              math.pi /
+              180;
+          const samples = 128;
+          var previous = Point2(
+            center.x + a * math.cos(rotation),
+            center.y + a * math.sin(rotation),
+          );
+          for (var index = 1; index <= samples; index++) {
+            final angle = 2 * math.pi * index / samples;
+            final localX = a * math.cos(angle);
+            final localY = b * math.sin(angle);
+            final current = Point2(
+              center.x +
+                  localX * math.cos(rotation) -
+                  localY * math.sin(rotation),
+              center.y +
+                  localX * math.sin(rotation) +
+                  localY * math.cos(rotation),
+            );
+            line(previous, current);
+            previous = current;
+          }
+        }
+      case GeometryKind.arc:
+        final points = object.points;
+        if (points.length >= 3) {
+          final a = points[0];
+          final b = points[1];
+          final c = points[2];
+          final determinant =
+              2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+          if (determinant.abs() > 1e-12) {
+            final aa = a.x * a.x + a.y * a.y;
+            final bb = b.x * b.x + b.y * b.y;
+            final cc = c.x * c.x + c.y * c.y;
+            final center = Point2(
+              (aa * (b.y - c.y) + bb * (c.y - a.y) + cc * (a.y - b.y)) /
+                  determinant,
+              (aa * (c.x - b.x) + bb * (a.x - c.x) + cc * (b.x - a.x)) /
+                  determinant,
+            );
+            final radius = center.distanceTo(a);
+            final start = math.atan2(a.y - center.y, a.x - center.x);
+            final middle = math.atan2(b.y - center.y, b.x - center.x);
+            var end = math.atan2(c.y - center.y, c.x - center.x);
+            double ccwDistance(double from, double to) {
+              var distance = to - from;
+              if (distance < 0) distance += 2 * math.pi;
+              return distance;
+            }
+
+            final ccwSpan = ccwDistance(start, end);
+            final middleSpan = ccwDistance(start, middle);
+            if (middleSpan > ccwSpan) end = end - 2 * math.pi;
+            final span = end - start;
+            const samples = 96;
+            var previous = a;
+            for (var index = 1; index <= samples; index++) {
+              final angle = start + span * index / samples;
+              final current = Point2(
+                center.x + radius * math.cos(angle),
+                center.y + radius * math.sin(angle),
+              );
+              line(previous, current);
+              previous = current;
+            }
+          }
+        }
       case GeometryKind.segment:
       case GeometryKind.line:
       case GeometryKind.ray:
@@ -156,8 +232,6 @@ class AnimatedGifExporter {
         }
       case GeometryKind.triangle:
       case GeometryKind.polygon:
-      case GeometryKind.arc:
-      case GeometryKind.conic:
       case GeometryKind.coordinate:
       case GeometryKind.solid:
         if (object.points.length > 1) {

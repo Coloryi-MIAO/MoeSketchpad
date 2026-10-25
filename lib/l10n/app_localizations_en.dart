@@ -372,6 +372,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passwordTooShort => 'Password must not be empty.';
 
   @override
+  String get passwordUseDeviceKey => 'Use a generated device key (no password)';
+
+  @override
+  String get passwordDeviceKeyNotice =>
+      'This key is stored on this device. The file may not open on another device; Web storage depends on browser security.';
+
+  @override
   String openFailed(Object error) {
     return 'Could not open document: $error';
   }

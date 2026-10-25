@@ -357,6 +357,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get passwordTooShort => '密码不能为空。';
 
   @override
+  String get passwordUseDeviceKey => '使用设备生成密钥（无需输入密码）';
+
+  @override
+  String get passwordDeviceKeyNotice =>
+      '密钥保存在本机；文件可能无法在其他设备打开。网页版保护程度取决于浏览器存储安全。';
+
+  @override
   String openFailed(Object error) {
     return '无法打开文档：$error';
   }

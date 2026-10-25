@@ -161,7 +161,8 @@ class ConstraintCommand extends Command<int> {
   ConstraintCommand(this.globals) {
     argParser
       ..addOption('value')
-      ..addMultiOption('target');
+      ..addMultiOption('target')
+      ..addFlag('internal', defaultsTo: false);
   }
 
   final CliGlobals globals;
@@ -196,20 +197,12 @@ class ConstraintCommand extends Command<int> {
         globals.t(
           '未知约束 "$rawType"。可用：coincident, point-on-line, '
               'point-on-circle, distance, horizontal, vertical, parallel, '
-              'perpendicular, equal-length, angle。',
+              'perpendicular, equal-length, angle, tangent-line-circle, '
+              'tangent-circle-circle。',
           'Unknown constraint "$rawType". Supported: coincident, point-on-line, '
               'point-on-circle, distance, horizontal, vertical, parallel, '
-              'perpendicular, equal-length, angle.',
-        ),
-      );
-    }
-    if (type == ConstraintType.tangent) {
-      throw CliFailure(
-        exitUsage,
-        globals.t(
-          '相切约束在空间解析上已预留，但本版本的求解器尚未实现，不能假装可用。',
-          'Tangency is reserved but not solvable in this build; it is not '
-              'faked as available.',
+              'perpendicular, equal-length, angle, tangent-line-circle, '
+              'tangent-circle-circle.',
         ),
       );
     }
@@ -227,6 +220,13 @@ class ConstraintCommand extends Command<int> {
         (value == null || !value.isFinite)) {
       throw CliFailure(exitUsage, 'This constraint requires a finite --value.');
     }
+    if (argResults!['internal'] == true &&
+        type != ConstraintType.tangentCircleCircle) {
+      throw CliFailure(
+        exitUsage,
+        '--internal is only valid for tangent-circle-circle.',
+      );
+    }
     final document = await loadDocument(globals);
     final id = _nextConstraintId(document);
     final constraint = Constraint(
@@ -234,6 +234,7 @@ class ConstraintCommand extends Command<int> {
       type: type,
       targetIds: targets,
       value: value,
+      internalTangency: argResults!['internal'] == true,
     );
     late GeometryDocument updated;
     try {
