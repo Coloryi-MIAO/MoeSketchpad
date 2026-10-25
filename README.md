@@ -40,7 +40,7 @@
 ## 实现状态与限制
 
 - 桌面端与 Web 最近文件列表及加密自动保存/崩溃恢复已接入；自动保存仅针对本会话已打开或保存且当前会话已提供密码的文档，恢复草稿时需要再次输入密码。
-- 桌面/Web GIF 与 APNG 动画导出已实现基本几何对象渲染；MP4 和 CLI 动图导出未实现。
+- 桌面/Web GIF 与 APNG、CLI GIF 动画导出已实现基础几何渲染；CLI APNG 与 MP4 未实现。
 - 线-圆、圆-圆外切/内切约束、线段-线段/线段-圆交点吸附、当前视口 SVG 导出已实现。
 - 单独的设备密钥包装格式、系统字体枚举未实现；免密码模式用设备安全存储中的随机密钥参与现有加密，不把固定默认密码写入文件。Web 不支持本地字体枚举。
 - 属性面板命令行使用受限安全命令子集，并非在应用内启动完整 CLI 或 shell。
@@ -115,6 +115,17 @@ Pop-Location
 需要文档中已有动点动画；默认导出 36 帧、每帧 80 ms，当前可渲染基础点、线段、
 圆、椭圆、圆弧、多边形和函数曲线。PNG 动画由标准 APNG 块组成，文件扩展名仍为
 `.png`，MIME 为 `image/apng`；部分较旧的图片查看器可能只显示首帧。
+
+CLI 可将文档中的动点动画导出为 GIF：
+
+```powershell
+$env:MSP_PASSWORD = 'document password'
+moesp export drawing.moesp --format=gif --animation=animation-1 `
+  --output=motion.gif --frames=24 --width=640 --height=360
+```
+
+若文档没有有限对象边界，需提供 `--viewport=left,top,right,bottom`。帧数、尺寸和
+每帧时长均有上限；GIF CLI 渲染支持点、线/线段、圆、椭圆、圆弧、多边形及函数曲线。
 
 ### AI 服务
 

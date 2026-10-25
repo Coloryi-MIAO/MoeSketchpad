@@ -10,6 +10,7 @@ environment:
 
 dependencies:
   args: ^2.7.0
+  image: ^4.5.4
   path: ^1.9.0
   moesketchpad_core:
     path: ../moesketchpad_core

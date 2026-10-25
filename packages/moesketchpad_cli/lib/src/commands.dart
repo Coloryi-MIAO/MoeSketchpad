@@ -4,12 +4,14 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:moesketchpad_core/moesketchpad_core.dart';
 import 'package:path/path.dart' as p;
 
+import 'animated_exporter.dart';
 import 'cli_support.dart';
 import 'mcp_server.dart';
 import 'primitives.dart';
@@ -1069,6 +1071,12 @@ class ExportCommand extends Command<int> {
         allowed: ['svg', 'json', 'gif', 'apng', 'mp4'],
       )
       ..addOption('output')
+      ..addOption('animation')
+      ..addOption('frames', defaultsTo: '24')
+      ..addOption('width', defaultsTo: '640')
+      ..addOption('height', defaultsTo: '360')
+      ..addOption('duration-ms', defaultsTo: '80')
+      ..addOption('viewport', help: 'left,top,right,bottom for GIF export')
       ..addFlag('force', defaultsTo: false);
   }
 
@@ -1078,25 +1086,27 @@ class ExportCommand extends Command<int> {
   String get name => 'export';
 
   @override
-  String get description => globals.t('导出 SVG 或 JSON', 'Export SVG or JSON');
+  String get description =>
+      globals.t('导出 SVG、JSON 或动画 GIF', 'Export SVG, JSON, or animated GIF');
 
   @override
   Future<int> run() async {
     if (argResults!.rest.length != 1) {
       throw CliFailure(
         exitUsage,
-        'Usage: moesp export <file.moesp> --format=svg|json --output=<path>',
+        'Usage: moesp export <file.moesp> --format=svg|json|gif '
+        '--output=<path> [--animation=id] [--frames=24] '
+        '[--width=640 --height=360 --duration-ms=80] '
+        '[--viewport=left,top,right,bottom]',
       );
     }
     final format = argResults!['format'] as String;
-    if (format == 'gif' || format == 'apng' || format == 'mp4') {
+    if (format == 'apng' || format == 'mp4') {
       throw CliFailure(
         exitUsage,
         globals.t(
-          '$format 导出尚未实现：本构建不包含已验证的 GIF/APNG/MP4 编码器，'
-              '不会伪造成功。请先使用 SVG/JSON。',
-          '$format export is not implemented: this build has no verified '
-              'GIF/APNG/MP4 encoder and will not fake success. Use SVG/JSON.',
+          '$format 导出尚未实现；请使用 SVG、JSON 或 GIF。',
+          '$format export is not implemented. Use SVG, JSON, or GIF.',
         ),
       );
     }
@@ -1113,7 +1123,38 @@ class ExportCommand extends Command<int> {
       );
     }
     await output.parent.create(recursive: true);
-    if (format == 'json') {
+    if (format == 'gif') {
+      final id = argResults!['animation'] as String?;
+      final animations = document.animations;
+      final animation = id == null
+          ? animations.length == 1
+                ? animations.single
+                : null
+          : animations.where((item) => item.id == id).firstOrNull;
+      if (animation == null) {
+        throw CliFailure(
+          exitUsage,
+          id == null
+              ? 'GIF export needs --animation=<id> when the document has zero or multiple animations.'
+              : 'Unknown animation "$id".',
+        );
+      }
+      final width = _boundedInt('width', min: 16, max: 2048);
+      final height = _boundedInt('height', min: 16, max: 2048);
+      final frames = _boundedInt('frames', min: 2, max: 120);
+      final duration = _boundedInt('duration-ms', min: 20, max: 2000);
+      final viewport = _viewport(document);
+      final bytes = const CliAnimatedExporter().exportGif(
+        document: document,
+        animation: animation,
+        viewport: viewport,
+        width: width,
+        height: height,
+        frameCount: frames,
+        frameDurationMs: duration,
+      );
+      await output.writeAsBytes(bytes, flush: true);
+    } else if (format == 'json') {
       await output.writeAsString(
         const JsonEncoder.withIndent('  ').convert(document.toJson()),
         flush: true,
@@ -1133,6 +1174,59 @@ class ExportCommand extends Command<int> {
       text: globals.t('已导出 → ${output.path}', 'Exported → ${output.path}'),
     );
     return exitSuccess;
+  }
+
+  int _boundedInt(String name, {required int min, required int max}) {
+    final value = int.tryParse(argResults![name] as String);
+    if (value == null || value < min || value > max) {
+      throw CliFailure(exitUsage, '--$name must be between $min and $max.');
+    }
+    return value;
+  }
+
+  Bounds2 _viewport(GeometryDocument document) {
+    final raw = argResults!['viewport'] as String?;
+    if (raw != null) {
+      final values = raw.split(',').map(double.tryParse).toList();
+      if (values.length != 4 ||
+          values.any((value) => value == null || !value.isFinite)) {
+        throw CliFailure(
+          exitUsage,
+          '--viewport must be left,top,right,bottom using finite numbers.',
+        );
+      }
+      if (values[0]! >= values[2]! || values[1]! >= values[3]!) {
+        throw CliFailure(
+          exitUsage,
+          '--viewport requires left < right and top < bottom.',
+        );
+      }
+      final bounds = Bounds2(values[0]!, values[1]!, values[2]!, values[3]!);
+      if (!bounds.isValid) {
+        throw CliFailure(
+          exitUsage,
+          '--viewport must have positive width and height.',
+        );
+      }
+      return bounds;
+    }
+    final bounds = document.contentBounds;
+    if (bounds == null) {
+      throw CliFailure(
+        exitUsage,
+        'Document has no bounded geometry; specify --viewport=left,top,right,bottom.',
+      );
+    }
+    final margin = math.max(bounds.width, bounds.height) * 0.08;
+    final safeMargin = margin > 0 ? margin : 1.0;
+    final expanded = bounds.inflate(safeMargin);
+    if (expanded.width <= 0 || expanded.height <= 0) {
+      throw CliFailure(
+        exitUsage,
+        'Could not infer a non-degenerate GIF viewport.',
+      );
+    }
+    return expanded;
   }
 }
 

@@ -2,6 +2,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:image/image.dart' as img;
+import 'package:moesketchpad_core/moesketchpad_core.dart';
 import 'package:test/test.dart';
 
 Future<ProcessResult> msp(List<String> args) => Process.run(
@@ -48,6 +50,69 @@ void main() {
       (jsonDecode(shorthand.stdout as String) as Map)['object'],
       (jsonDecode(canonical.stdout as String) as Map)['object'],
     );
+  });
+
+  test('CLI exports encrypted animated documents as GIF', () async {
+    final directory = await Directory.systemTemp.createTemp('msp-gif-');
+    addTearDown(() => directory.delete(recursive: true));
+    final documentPath =
+        '${directory.path}${Platform.pathSeparator}motion.moesp';
+    final outputPath = '${directory.path}${Platform.pathSeparator}motion.gif';
+    final animation = AnimationSpec(
+      id: 'animation-1',
+      targetId: 'point-1',
+      pathObjectId: 'segment-1',
+      pathKind: 'segment',
+    );
+    final document = GeometryDocument(
+      objects: [
+        GeometryObject(
+          id: 'point-1',
+          kind: GeometryKind.point,
+          points: const [Point2(0, 0)],
+        ),
+        GeometryObject(
+          id: 'segment-1',
+          kind: GeometryKind.segment,
+          points: const [Point2(-2, 0), Point2(2, 0)],
+        ),
+      ],
+      animations: [animation],
+    );
+    await File(
+      documentPath,
+    ).writeAsBytes(await MspCodec().encode(document, password: 'test-secret'));
+
+    final exported = await Process.run(
+      Platform.resolvedExecutable,
+      [
+        'run',
+        'bin/msp.dart',
+        'export',
+        documentPath,
+        '--format=gif',
+        '--animation=animation-1',
+        '--frames=4',
+        '--width=64',
+        '--height=48',
+        '--output=$outputPath',
+        '--json',
+      ],
+      workingDirectory: Directory.current.path,
+      environment: {...Platform.environment, 'MSP_PASSWORD': 'test-secret'},
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
+    );
+    expect(exported.exitCode, 0, reason: exported.stderr.toString());
+    expect(
+      jsonDecode(exported.stdout as String),
+      containsPair('format', 'gif'),
+    );
+    final decoded = img.decodeGif(await File(outputPath).readAsBytes());
+    expect(decoded, isNotNull);
+    expect(decoded!.numFrames, 4);
+    expect(decoded.width, 64);
+    expect(decoded.height, 48);
   });
 
   test('unsolvable triangle exits 5 and malformed usage exits 2', () async {
