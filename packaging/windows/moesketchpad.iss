@@ -1,7 +1,7 @@
-# MoeSketchpad Windows installer and .moesp file association.
-# Build with Inno Setup 6+ after:
-#   flutter build windows --release
-# The script registers a per-machine association and an image/icon for .moesp.
+; MoeSketchpad Windows installer and .moesp file association.
+; Build with Inno Setup 6+ after:
+;   flutter build windows --release
+; The script registers a per-machine association and an image/icon for .moesp.
 ; SPDX-License-Identifier: GPL-3.0-only
 
 #define MyAppName "萌板 / MoeSketchpad"
