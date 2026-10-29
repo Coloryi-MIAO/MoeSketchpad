@@ -1,0 +1,22 @@
+MoeSketchpad / 萌板 — GPL-3.0 source availability / 源码获取说明
+Copyright (C) 2026 Coloryi-MIAO
+SPDX-License-Identifier: GPL-3.0-only
+
+The complete corresponding source code for this binary distribution is
+available at:
+
+    https://github.com/Coloryi-MIAO/MoeSketchpad
+
+It corresponds to the tag/commit recorded in the About dialog and in the
+release metadata (BuildInfo.commit). If you received a binary without a
+matching public source revision, contact the copyright holder via the issue
+tracker:
+
+    https://github.com/Coloryi-MIAO/MoeSketchpad/issues
+
+Build prerequisites and exact dependency pins are in pubspec.yaml and
+pubspec.lock. Flutter/Dart SDK versions are documented in README.md. The GPL
+license text is in COPYING; third-party notices are in NOTICE.
+
+本分发的对应完整源码可在上述仓库获取，其版本对应关于界面中记录的构建
+提交。二进制中随附本文件以满足 GPL-3.0 的源码提供要求。

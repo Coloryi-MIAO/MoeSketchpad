@@ -1,0 +1,12 @@
+# MoeSketchpad Web hosting headers (Netlify / Cloudflare Pages syntax).
+# Ensure .moesp downloads are identified correctly and app assets are not cached
+# across releases without revalidation.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+/*.moesp
+  Content-Type: application/x-moesketchpad
+  Content-Disposition: attachment

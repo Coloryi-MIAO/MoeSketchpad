@@ -1,0 +1,166 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: "3.47.6"
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter gen-l10n
+      - name: Check code format (web)
+        run: dart format --output=none --set-exit-if-changed lib test packages
+        continue-on-error: true
+      - run: (cd packages/moesketchpad_core && dart pub get && dart analyze && dart test)
+      - run: (cd packages/moesketchpad_cli && dart pub get && dart analyze && dart test)
+      - name: Analyze main project
+        run: |
+          dart pub cache repair
+          flutter analyze
+      - run: flutter test
+      - name: Build web
+        run: flutter build web --release --dart-define=MSP_COMMIT=${{ github.sha }} --dart-define=MSP_BUILD_DATE=${{ github.run_started_at }}
+      - name: Verify MSP MIME headers
+        run: grep -q "application/x-moesketchpad" web/_headers
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moesketchpad-web
+          path: build/web/
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter gen-l10n
+      - name: Check code format (windows)
+        shell: pwsh
+        run: dart format --output=none --set-exit-if-changed lib test packages
+        continue-on-error: true
+      - run: (cd packages/moesketchpad_core && dart pub get && dart analyze && dart test)
+      - run: (cd packages/moesketchpad_cli && dart pub get && dart analyze && dart test)
+      - name: Analyze main project
+        shell: pwsh
+        run: |
+          flutter pub cache repair
+          flutter analyze
+      - name: Build Windows
+        shell: pwsh
+        run: |
+          $version = "1.0.0"
+          if ("${{ github.ref_name }}" -match '^v(\d+\.\d+\.\d+)') { $version = $Matches[1] }
+          flutter build windows --release --build-name=$version --build-number=${{ github.run_number }} --dart-define=MSP_VERSION=$version --dart-define=MSP_BUILD_NUMBER=${{ github.run_number }} --dart-define=MSP_COMMIT=${{ github.sha }} --dart-define=MSP_BUILD_DATE=${{ github.run_started_at }}
+      - name: Compile moesp CLI
+        run: dart compile exe packages/moesketchpad_cli/bin/msp.dart -o build/windows/x64/runner/Release/moesp.exe
+      - name: Build Flutter installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force installer\assets, packaging\windows\output | Out-Null
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath installer\assets\moesketchpad-windows.zip -CompressionLevel Optimal
+          Copy-Item assets\if.ico installer\windows\runner\resources\app_icon.ico -Force
+          Push-Location installer
+          flutter pub get
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter analyze
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter build windows --release --build-name=1.0.0 --build-number=${{ github.run_number }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+          Compress-Archive -Path installer\build\windows\x64\runner\Release\* -DestinationPath packaging\windows\output\moesketchpad-setup-windows-x64.zip -CompressionLevel Optimal
+          Remove-Item installer\assets\moesketchpad-windows.zip -Force
+      - name: Add GPL source notice to artifact
+        shell: pwsh
+        run: |
+          $dest = "build/windows/x64/runner/Release"
+          Copy-Item COPYING, NOTICE, SOURCE-AVAILABILITY.txt -Destination $dest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moesketchpad-windows
+          path: build/windows/x64/runner/Release/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moesketchpad-windows-installer
+          path: packaging/windows/output/moesketchpad-setup-windows-x64.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: moesketchpad-windows-installer
+          path: release
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_TAG: ${{ github.ref_name }}
+        run: |
+          cd release
+          sha256sum moesketchpad-setup-windows-x64.zip > moesketchpad-setup-windows-x64.zip.sha256
+          if gh release view "$GH_TAG" >/dev/null 2>&1; then
+            gh release upload "$GH_TAG" moesketchpad-setup-windows-x64.zip moesketchpad-setup-windows-x64.zip.sha256 --clobber
+          else
+            gh release create "$GH_TAG" moesketchpad-setup-windows-x64.zip moesketchpad-setup-windows-x64.zip.sha256 --generate-notes
+          fi
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter gen-l10n
+      - name: Check code format (macos)
+        run: dart format --output=none --set-exit-if-changed lib test packages
+        continue-on-error: true
+      - run: dart pub get
+        working-directory: packages/moesketchpad_core
+      - run: dart pub get
+        working-directory: packages/moesketchpad_cli
+      - name: Analyze main project
+        run: |
+          dart pub cache repair
+          flutter analyze
+      - run: flutter test
+      - name: Build macOS
+        run: flutter build macos --release --dart-define=MSP_COMMIT=${{ github.sha }} --dart-define=MSP_BUILD_DATE=${{ github.run_started_at }}
+      - name: Add GPL source notice to app
+        run: |
+          APP="build/macos/Build/Products/Release/moesketchpad.app/Contents/Resources"
+          cp COPYING NOTICE SOURCE-AVAILABILITY.txt "$APP/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moesketchpad-macos
+          path: build/macos/Build/Products/Release/

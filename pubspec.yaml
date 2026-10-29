@@ -1,0 +1,46 @@
+name: moesketchpad
+description: "MoeSketchpad / 萌板 — cross-platform dynamic geometry sketchpad."
+publish_to: "none"
+version: 1.0.0+1
+repository: https://github.com/Coloryi-MIAO/MoeSketchpad
+license: GPL-3.0-only
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+  flutter: ">=3.35.0"
+
+dependencies:
+  archive: ^4.5.2
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_secure_storage: ^9.2.4
+  flutter_bloc: ^9.1.1
+  dio: ^5.8.0
+  crypto: ^3.0.6
+  image: ^4.5.4
+  intl: ^0.20.3
+  file_selector: ^1.1.0
+  screen_retriever: ^0.2.2
+  window_manager: ^0.5.2
+  web: ^1.1.2
+  path: ^1.9.0
+  shared_preferences: ^2.5.3
+  moesketchpad_core:
+    path: packages/moesketchpad_core
+  moesketchpad_cli:
+    path: packages/moesketchpad_cli
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  generate: true
+  assets:
+    - assets/
+    - COPYING
+    - NOTICE

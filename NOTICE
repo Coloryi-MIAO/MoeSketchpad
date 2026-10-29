@@ -1,0 +1,47 @@
+MoeSketchpad / 萌板
+Copyright (C) 2026 Coloryi-MIAO
+SPDX-License-Identifier: GPL-3.0-only
+
+This product includes software developed by third parties. The project source
+is licensed under GPL-3.0-only; third-party components remain under their own
+licenses. Full license texts are distributed with the corresponding packages
+and are available from the upstream repositories and the Dart/Flutter SDK.
+
+Runtime and development components observed in pubspec.lock at the time of
+this build (versions are resolved by pub; see pubspec.lock for exact pins):
+
+- Flutter SDK, Dart SDK — BSD-3-Clause — https://github.com/flutter/flutter
+- flutter_localizations — BSD-3-Clause — Flutter SDK
+- intl — BSD-3-Clause — https://pub.dev/packages/intl
+- flutter_bloc — MIT — https://pub.dev/packages/flutter_bloc
+- bloc — MIT — https://pub.dev/packages/bloc
+- provider — MIT — https://pub.dev/packages/provider
+- args — BSD-3-Clause — https://pub.dev/packages/args
+- file_selector and platform implementations — BSD-3-Clause — https://pub.dev/packages/file_selector
+- window_manager — MIT — https://pub.dev/packages/window_manager
+- screen_retriever — MIT — https://pub.dev/packages/screen_retriever
+- path — BSD-3-Clause — https://pub.dev/packages/path
+- cryptography — Apache-2.0 — https://pub.dev/packages/cryptography
+- archive — MIT — https://pub.dev/packages/archive
+- cross_file — BSD-3-Clause — https://pub.dev/packages/cross_file
+- http — BSD-3-Clause — https://pub.dev/packages/http
+- plugin_platform_interface — BSD-3-Clause — Flutter
+- web — BSD-3-Clause — https://pub.dev/packages/web
+- test, flutter_test — BSD-3-Clause — Dart/Flutter SDK
+- flutter_lints, lints — BSD-3-Clause — https://pub.dev/packages/flutter_lints
+- material_color_utilities — Apache-2.0 — https://pub.dev/packages/material_color_utilities
+
+Icons and artwork in assets/ were generated for this project and are released
+under GPL-3.0-only together with the project, unless a separate license is
+noted in the file or directory.
+
+To regenerate the dependency list and notices for a release, use the scripts
+under tool/ and inspect the resolved licenses in the pub cache and SDK before
+shipping binaries. This NOTICE is informational and does not replace the
+license files shipped by each component.
+
+Source code for GPL compliance is available at:
+https://github.com/Coloryi-MIAO/MoeSketchpad
+
+If you received binaries, the corresponding source is available from the URL
+above; distribution terms for the GPL text are in COPYING.

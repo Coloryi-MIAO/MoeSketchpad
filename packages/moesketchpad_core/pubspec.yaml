@@ -1,0 +1,16 @@
+name: moesketchpad_core
+description: Pure Dart geometry kernel, document model and encrypted MSP codec.
+version: 0.1.0
+publish_to: "none"
+repository: https://github.com/Coloryi-MIAO/MoeSketchpad
+license: GPL-3.0-only
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+dependencies:
+  archive: ^4.5.2
+  cryptography: ^2.9.0
+
+dev_dependencies:
+  test: ^1.25.0

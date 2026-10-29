@@ -1,0 +1,23 @@
+name: moesketchpad_cli
+description: The `moesp` command-line interface for MoeSketchpad documents.
+version: 0.1.0
+publish_to: "none"
+repository: https://github.com/Coloryi-MIAO/MoeSketchpad
+license: GPL-3.0-only
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+dependencies:
+  args: ^2.7.0
+  image: ^4.5.4
+  path: ^1.9.0
+  moesketchpad_core:
+    path: ../moesketchpad_core
+
+dev_dependencies:
+  test: ^1.25.0
+
+executables:
+  moesp: msp
+  msp: msp
