@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #include "flutter_window.h"
 
 #include <optional>
@@ -47,22 +48,34 @@ void FlutterWindow::OnDestroy() {
   Win32Window::OnDestroy();
 }
 
-LRESULT FlutterWindow::HandleGetMinMaxInfo(HWND hwnd, WPARAM wparam,
-                                           LPARAM lparam) const {
-  // Let any engine-imposed minimum-size constraints stand, then override the
-  // maximized rectangle.
+LRESULT FlutterWindow::HandleGetMinMaxInfo(HWND hwnd, LPARAM lparam) const {
+  // Windows sizes a maximized window to the whole monitor, so the window would
+  // cover the taskbar. The app hides its title bar through Flutter
+  // (TitleBarStyle.hidden) but keeps the WS_OVERLAPPEDWINDOW resize frame, so a
+  // maximized window also overhangs the screen by the frame on every side.
+  //
+  // ptMaxSize is measured in frame-inclusive window coordinates while the work
+  // area is in screen coordinates, so the frame must be subtracted from the
+  // requested client size to land the window exactly on the work area.
   auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
   HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
   MONITORINFO monitor_info{};
   monitor_info.cbSize = sizeof(monitor_info);
-  if (GetMonitorInfo(monitor, &monitor_info)) {
-    const RECT& work = monitor_info.rcWork;
-    const RECT& full = monitor_info.rcMonitor;
-    info->ptMaxPosition.x = work.left - full.left;
-    info->ptMaxPosition.y = work.top - full.top;
-    info->ptMaxSize.x = work.right - work.left;
-    info->ptMaxSize.y = work.bottom - work.top;
+  if (!GetMonitorInfo(monitor, &monitor_info)) {
+    return 0;
   }
+
+  const RECT& work = monitor_info.rcWork;
+  const RECT& full = monitor_info.rcMonitor;
+
+  // ptMaxSize describes the maximized *client* area; Windows then adds this
+  // window's non-client frame around it. Requesting the bare work-area size is
+  // therefore what lands the frame-inclusive window rect exactly on the work
+  // area, leaving the taskbar uncovered.
+  info->ptMaxPosition.x = work.left - full.left;
+  info->ptMaxPosition.y = work.top - full.top;
+  info->ptMaxSize.x = work.right - work.left;
+  info->ptMaxSize.y = work.bottom - work.top;
   return 0;
 }
 
@@ -76,21 +89,17 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,
                                                       lparam);
     if (result) {
-      // WM_GETMINMAXINFO lets the engine set a minimum size; we still need to
-      // override the maximized rectangle afterwards (see below).
+      // The engine and its plugins (notably window_manager, which sets minimum
+      // and maximum track sizes) consumed the message. WM_GETMINMAXINFO still
+      // needs the maximized rectangle pinned to the work area afterwards.
       if (message != WM_GETMINMAXINFO) {
         return *result;
       }
     }
   }
 
-  // Pin the maximized window to the monitor work area so it does not cover the
-  // taskbar. Windows computes the maximized size from the full monitor plus the
-  // window frame; with the title bar hidden by Flutter but the resize frame
-  // retained, that would make the window overhang the screen edges and overlap
-  // the taskbar. Handle it after the engine so plugin-set minimum sizes survive.
   if (message == WM_GETMINMAXINFO) {
-    return HandleGetMinMaxInfo(hwnd, wparam, lparam);
+    return HandleGetMinMaxInfo(hwnd, lparam);
   }
 
   switch (message) {
