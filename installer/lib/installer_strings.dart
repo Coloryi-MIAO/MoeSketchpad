@@ -77,6 +77,9 @@ class InstallerStrings {
       isChinese ? '正在卸载萌板' : 'Uninstalling MoeSketchpad';
   String get uninstallHeading => isChinese ? '卸载萌板' : 'Uninstall MoeSketchpad';
   String get uninstallCancel => isChinese ? '取消卸载' : 'Cancel';
+  String get autoConfirmHint => isChinese
+      ? '卸载将在 3 秒后自动开始…'
+      : 'Uninstall will start automatically in 3 seconds…';
   String get uninstallConfirmBody => isChinese
       ? '即将从此电脑移除萌板、moesp 命令、桌面快捷方式、开始菜单快捷方式以及 .moesp 文件关联。\n\n此操作不可撤销。'
       : 'This will remove MoeSketchpad, the moesp command, desktop and Start '

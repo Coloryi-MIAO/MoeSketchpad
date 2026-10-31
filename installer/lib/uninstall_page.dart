@@ -3,6 +3,7 @@
 /// reports progress, and finishes with a single button.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -51,6 +52,7 @@ class _UninstallPageState extends State<UninstallPage> {
   String _status = '';
   double _progress = 0;
   bool _started = false;
+  Timer? _autoConfirmTimer;
 
   /// Language recorded at install time; falls back to the system language.
   String _language = 'en';
@@ -63,11 +65,27 @@ class _UninstallPageState extends State<UninstallPage> {
     _bootstrap();
   }
 
+  @override
+  void dispose() {
+    _autoConfirmTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _bootstrap() async {
     final manifest = await InstallManifest.load(widget.installDir);
     if (!mounted) return;
     setState(() {
       _language = manifest?.languageCode ?? _systemLanguage();
+    });
+    // Show the confirm screen briefly, then auto-advance so launches from ARP
+    // run to completion hands-free. Schedule on the next frame to guarantee a
+    // valid build context for showDialog.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _autoConfirmTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted && !_started) {
+          _confirmAndRun(context);
+        }
+      });
     });
   }
 
@@ -88,6 +106,7 @@ class _UninstallPageState extends State<UninstallPage> {
                 child: Text(strings.uninstallCancel),
               ),
               FilledButton(
+                autofocus: true,
                 style: FilledButton.styleFrom(
                   backgroundColor: Colors.red.shade600,
                   foregroundColor: Colors.white,
@@ -100,6 +119,7 @@ class _UninstallPageState extends State<UninstallPage> {
         ) ??
         false;
     if (confirmed) {
+      _autoConfirmTimer?.cancel();
       setState(() {
         _status = strings.uninstallStatusRemoving;
         _started = true;
@@ -221,6 +241,11 @@ class _UninstallPageState extends State<UninstallPage> {
             ),
           ),
           const SizedBox(height: 26),
+          Text(
+            strings.autoConfirmHint,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 11, color: _inkSoft),
+          ),
           Row(
             children: [
               Expanded(
