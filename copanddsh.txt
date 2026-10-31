@@ -1,0 +1,48 @@
+# Copilot 任务：MoeSketchpad 内核 / CLI 审查与补全
+# 分工更新（2026-10-24 11:13）：用户已明确要求 Copilot 全盘接手。
+# DeepSeek 请暂停本仓库的文件编辑；如仍需协作，请先在本文件确认当前未提交改动已写盘。
+
+项目：萌板 / MoeSketchpad（D:\1\moesketchpad）
+许可证：每个源文件必须有 `// SPDX-License-Identifier: GPL-3.0-only`。
+禁止：编造依赖、伪造平台能力、在日志/异常/命令行中出现密码、任意 shell 执行。
+
+## 全盘接手后的范围
+
+- 全仓库：Flutter UI、core、CLI、MCP、平台和测试均由 Copilot 整合与验证。
+- 用户明确要求无限无边界纯画布，不显示 A4/纸张边界；此要求优先于旧 UI 测试与旧文档。
+
+## 当前状态（已实现，需审查而不是重写）
+
+- 纯 Dart 内核已包含：`GeometryDocument` v2、R-tree + SpatialIndex、稳健交点函数、Argon2id + AES-256-GCM + gzip 的 `.msp` v2、表达式 AST、约束求解器、测量、动画求值、三角形简写解析。
+- CLI 已实现：`create/constraint/label/measure/animate/calc/view/validate/inspect/convert/export/mcp-serve`。
+- MCP 为 JSON-RPC stdio，白名单 6 工具，路径限制在 `--workspace`，只读文件校验。
+- 已知限制：设备钥匙串/设备密钥未实现（仅密码）；tangent 约束未实现；GIF/APNG/MP4 导出未实现；SvgExporter 目前位于 CLI 包，应该移动到 core 以便 UI 复用。
+
+## 最高优先级任务
+
+1. **让全部测试可运行并通过**：
+   - `cd packages/moesketchpad_core && dart test`
+   - `cd packages/moesketchpad_cli && dart test`
+   - 根目录 `flutter test`
+   - 修复发现的真实逻辑缺陷。
+2. **补 core 单元测试**（至少）：
+   - 表达式：嵌套、错误函数、除零、NaN/Inf、深度/长度限制。
+   - 稳健性：近平行线、重合圆、相切、零长度线段、极大/极小坐标、容差参数。
+   - R-tree：1 万条随机矩形查询与删除后查询、包围盒正确性。
+   - 约束：distance/perpendicular/horizontal/pointOnLine 可收敛；不可满足时 `converged=false`；固定点不移动。
+   - 测量：cm/mm 单位换算、圆面积、多边形面积、弧长、角度、斜率。
+   - 动画：loop/pingpong 时间映射、segment/circle/function 路径。
+   - MSP：header 偏移与长度、gzip 压缩炸弹上限、篡改 AAD、截断、错误密码、超大文件、JSON roundtrip、迁移 API。
+3. **CLI 集成测试**（使用 `Process.run` 或直接调用 `MspCli`）：
+   - 全部退出码 0/1/2/3/4/5/6 的可达场景。
+   - triangle 简写与规范形式输出完全等价；无解返回 5。
+   - 所有写文件命令必须要求 `MSP_PASSWORD` 环境变量；错误密码返回 4。
+   - `--json` 只把机器 JSON 放 stdout，诊断放 stderr。
+   - MCP：initialize、tools/list、tools/call；非法工具/参数被拒；路径逃逸（`..`、绝对路径、符号链接）返回安全错误；审计日志不含内容/密码。
+4. **把 `SvgExporter` 从 CLI 移到 `packages/moesketchpad_core/lib/src/svg_export.dart` 并从 barrel 导出**，CLI 改为引用 core；保持现有 CLI 测试和 `flutter analyze` 通过。UI 会随后接入。
+5. **安全审查**：MspCodec 先验证长度再分配/解密；KDF 参数需固定或明确 profile；错误信息不泄露；CLI 原子写入崩溃恢复；MCP 路径规范化；无命令注入。
+6. **运行并报告**：`dart format --set-exit-if-changed`、各包 `dart analyze`、根 `flutter analyze`。
+
+## 交付约定
+
+直接改代码并跑测试；每次报告：修改文件、命令与结果、仍存在的限制。不要声称未验证的平台通过。UI 不要动。

@@ -1040,15 +1040,6 @@ class SketchpadCanvasState extends State<SketchpadCanvas> {
     _dragObjectId = id;
   }
 
-  void _applyTransformPreview(GeometryDocument document, CanvasState canvas) {
-    if (_transformObjectId == null || _transformMode == 'none') return;
-    final object = document.objectById(_transformObjectId!);
-    if (object == null) return;
-    // The actual transformed points are written into _dragDocument by the
-    // pan-update handler; this helper is retained for symmetry/safety.
-    _dragDocument = document.withObject(object.copyWith(points: List.of(object.points)));
-  }
-
   void _showFunctionDialog(Point2 at) {
     showDialog<void>(
       context: context,

@@ -310,8 +310,8 @@ class AiBloc extends Cubit<AiState> {
               });
         completion = await _apiClient.complete(
           endpoint: uri,
-          model: state.model.trim(),
-          apiKey: apiKey,
+          model: effectiveModel,
+          apiKey: effectiveApiKey,
           messages: [
             ...messages,
             {'role': 'assistant', 'content': invalidOutput},

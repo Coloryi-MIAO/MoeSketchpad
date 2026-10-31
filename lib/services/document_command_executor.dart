@@ -361,9 +361,15 @@ class DocumentCommandExecutor {
     return result;
   }
 
-  double _number(Map<String, String> options, String name) {
-    final value = double.tryParse(options[name] ?? '');
+  double _number(Map<String, String> options, String name, {double? fallback}) {
+    final raw = options[name];
+    if (raw == null) {
+      if (fallback != null) return fallback;
+      throw FormatException('--$name must be a finite number.');
+    }
+    final value = double.tryParse(raw);
     if (value == null || !value.isFinite) {
+      if (fallback != null) return fallback;
       throw FormatException('--$name must be a finite number.');
     }
     return value;

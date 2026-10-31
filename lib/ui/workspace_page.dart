@@ -1329,14 +1329,14 @@ class _WorkspacePageState extends State<WorkspacePage> {
   Widget _standardBar(AppLocalizations l10n, DocumentState documentState) {
     final width = MediaQuery.sizeOf(context).width;
     final compact = width < 1500;
-    final toolColumns = ((width - 20) / 60).floor().clamp(
+    final toolColumns = ((width - 20) / 56).floor().clamp(
       1,
       MoeTool.values.length,
     );
     final toolRows = compact
         ? (MoeTool.values.length + toolColumns - 1) ~/ toolColumns
         : 1;
-    final toolRowHeight = compact ? toolRows * 46.0 : 43.0;
+    final toolRowHeight = compact ? toolRows * 54.0 + 6 : 43.0;
     return Container(
       height: 53 + toolRowHeight,
       padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -1636,8 +1636,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
         message: '$label\n${_toolHint(AppLocalizations.of(context), tool)}',
         child: SizedBox(
           key: ValueKey('top-tool-${tool.name}'),
-          width: 86,
-          height: 56,
+          width: 56,
+          height: 50,
           child: Material(
             color: background,
             shape: RoundedRectangleBorder(
@@ -2154,8 +2154,6 @@ class _SizeEditor extends StatefulWidget {
 }
 
 class _SizeEditorState extends State<_SizeEditor> {
-  bool _hasFocus = false;
-
   @override
   void didUpdateWidget(_SizeEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
