@@ -2165,19 +2165,15 @@ class _AnimationDialogState extends State<_AnimationDialog> {
 }
 
 /// Inline width/height editor shown in the context bar for a selected object
-/// that has finite bounds. The parent owns the text controllers so values are
-/// preserved while the same object stays selected.
+/// that has finite bounds. Owns its own controllers so the fields are always
+/// editable independently of canvas-driven document updates.
 class _SizeEditor extends StatefulWidget {
   const _SizeEditor({
     required this.object,
-    required this.widthController,
-    required this.heightController,
     required this.onApply,
   });
 
   final GeometryObject object;
-  final TextEditingController widthController;
-  final TextEditingController heightController;
   final void Function(double width, double height) onApply;
 
   @override
@@ -2185,103 +2181,70 @@ class _SizeEditor extends StatefulWidget {
 }
 
 class _SizeEditorState extends State<_SizeEditor> {
+  final _widthController = TextEditingController();
+  final _heightController = TextEditingController();
+  bool _focused = false;
+  bool _pendingSync = true; // true until the next frame so we initialize
+
   @override
   void initState() {
     super.initState();
-    _syncFromObject();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _pendingSync = false);
+        _syncFromObject(force: true);
+      }
+    });
   }
 
   @override
   void didUpdateWidget(_SizeEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Refresh the displayed values whenever the selection changes to another
-    // object, or the same object is resized from the canvas.
-    final oldBounds = oldWidget.object.bounds;
-    final newBounds = widget.object.bounds;
-    if (widget.object.id != oldWidget.object.id ||
-        oldBounds?.width != newBounds?.width ||
-        oldBounds?.height != newBounds?.height) {
-      _syncFromObject();
+    // Re-sync when the selection changes to a different object. While the user
+    // is actively editing we defer syncing until focus is lost, so a
+    // canvas-driven resize never clobbers the in-progress edit.
+    if (widget.object.id != oldWidget.object.id) {
+      _pendingSync = true;
+      _syncFromObject(force: true);
     }
   }
 
-  /// Mirrors the selected object's bounds into the text fields.
-  ///
-  /// Skipped while the user is typing in them, so an inbound document update
-  /// cannot overwrite an in-progress edit.
-  void _syncFromObject() {
+  @override
+  void dispose() {
+    _widthController.dispose();
+    _heightController.dispose();
+    super.dispose();
+  }
+
+  /// Mirrors the selected object's bounds into the text fields when not editing.
+  void _syncFromObject({bool force = false}) {
+    if (!force && _focused) return;
     final bounds = widget.object.bounds;
     if (bounds == null) return;
     final width = bounds.width.toStringAsFixed(2);
     final height = bounds.height.toStringAsFixed(2);
-    if (widget.widthController.text != width) {
-      widget.widthController.text = width;
-    }
-    if (widget.heightController.text != height) {
-      widget.heightController.text = height;
-    }
+    if (_widthController.text != width) _widthController.text = width;
+    if (_heightController.text != height) _heightController.text = height;
   }
 
   void _apply() {
-    final width = double.tryParse(widget.widthController.text.trim());
-    final height = double.tryParse(widget.heightController.text.trim());
+    final width = double.tryParse(_widthController.text.trim());
+    final height = double.tryParse(_heightController.text.trim());
     if (width == null || height == null || width <= 0 || height <= 0) return;
     widget.onApply(width, height);
+    // Re-sync to the new bounds now that the edit is committed.
+    _syncFromObject(force: true);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final bounds = widget.object.bounds;
-    if (bounds == null) return const SizedBox.shrink();
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text(
-          'W',
-          style: TextStyle(fontSize: 10, color: Color(0xff526576)),
-        ),
-        const SizedBox(width: 4),
-        SizedBox(
-          width: 56,
-          child: TextField(
-            controller: widget.widthController,
-            textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace'),
-            decoration: const InputDecoration(
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              border: OutlineInputBorder(),
-            ),
-            onSubmitted: (_) => _apply(),
-          ),
-        ),
-        const SizedBox(width: 6),
-        const Text(
-          'H',
-          style: TextStyle(fontSize: 10, color: Color(0xff526576)),
-        ),
-        const SizedBox(width: 4),
-        SizedBox(
-          width: 56,
-          child: TextField(
-            controller: widget.heightController,
-            textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace'),
-            decoration: const InputDecoration(
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              border: OutlineInputBorder(),
-            ),
-            onSubmitted: (_) => _apply(),
-          ),
-        ),
-        const SizedBox(width: 6),
-        FilledButton(
-          onPressed: _apply,
-          style: FilledButton.styleFrom(
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-          ),
+  String _stripZero(String v) => v.endsWith('.00') ? v.substring(0, v.length - 3) : v;
+
+  void _nextField(TextEditingController from, TextEditingController to) {
+    _apply();
+    FocusScope.of(context).nextFocus();
+  }
+}
+
+
           child: const Text('Apply', style: TextStyle(fontSize: 10)),
         ),
       ],

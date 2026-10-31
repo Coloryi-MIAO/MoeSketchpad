@@ -2,7 +2,9 @@
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
 
+#include <algorithm>
 #include <string>
+#include <vector>
 
 #include "flutter_window.h"
 #include "utils.h"
@@ -92,18 +94,29 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
-  // Claim the single-instance lock before doing any work. When the mutex already
-  // exists another installer is running, so this process asks it to come forward
-  // and then exits without showing a window of its own.
-  HANDLE instance_mutex = ::CreateMutexW(nullptr, TRUE, kInstallerMutex);
-  const bool already_running =
-      instance_mutex != nullptr && ::GetLastError() == ERROR_ALREADY_EXISTS;
-  if (already_running) {
-    RequestActivation();
-    if (instance_mutex != nullptr) {
-      ::CloseHandle(instance_mutex);
+  // Claim the single-instance lock. When this launch was for the installer (no
+  // --uninstall flag), a second instance simply raises the existing one and
+  // exits. An explicit uninstall must always run on its own so the ARP entry
+  // can be removed even while an installer window is open.
+  std::vector<std::string> command_line_arguments =
+      GetCommandLineArguments();
+  const bool is_uninstall = std::find_if(
+      command_line_arguments.begin(), command_line_arguments.end(),
+      [](const std::string& a) { return a == "--uninstall"; }) !=
+      command_line_arguments.end();
+
+  HANDLE instance_mutex = nullptr;
+  if (!is_uninstall) {
+    instance_mutex = ::CreateMutexW(nullptr, TRUE, kInstallerMutex);
+    const bool already_running =
+        instance_mutex != nullptr && ::GetLastError() == ERROR_ALREADY_EXISTS;
+    if (already_running) {
+      RequestActivation();
+      if (instance_mutex != nullptr) {
+        ::CloseHandle(instance_mutex);
+      }
+      return EXIT_SUCCESS;
     }
-    return EXIT_SUCCESS;
   }
 
   // Initialize COM, so that it is available for use in the library and/or
@@ -112,16 +125,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   flutter::DartProject project(L"data");
 
-  std::vector<std::string> command_line_arguments =
-      GetCommandLineArguments();
-
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
+
+  const wchar_t* window_title = is_uninstall
+      ? L"MoeSketchpad Uninstall"
+      : L"MoeSketchpad Setup";
 
   FlutterWindow window(project);
   Win32Window::Point origin(0, 0);
   Win32Window::Size size(kInitialWidth, kInitialHeight);
   // The installer runs chromeless: the Dart chrome supplies the title bar.
-  if (!window.Create(L"MoeSketchpad Setup", origin, size, /*frameless=*/true)) {
+  if (!window.Create(window_title, origin, size, /*frameless=*/true)) {
     if (instance_mutex != nullptr) {
       ::CloseHandle(instance_mutex);
     }
