@@ -235,6 +235,7 @@ class _UninstallPageState extends State<UninstallPage> {
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton(
+                  autofocus: true,
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xffc9453d),
                     foregroundColor: Colors.white,

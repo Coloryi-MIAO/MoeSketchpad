@@ -69,8 +69,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
   final Map<String, String> _recoveryPasswords = {};
   Timer? _autoSaveTimer;
   bool _autoSaveBusy = false;
-  final TextEditingController _widthController = TextEditingController();
-  final TextEditingController _heightController = TextEditingController();
 
   @override
   void initState() {
@@ -96,8 +94,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
   @override
   void dispose() {
     _autoSaveTimer?.cancel();
-    _widthController.dispose();
-    _heightController.dispose();
     if (_closeRegistered) {
       CloseGuard.uninstall();
     }
@@ -1847,9 +1843,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
                   if (object.bounds != null) ...[
                     const SizedBox(width: 12),
                     _SizeEditor(
+                      key: ValueKey('size-editor-${object.id}'),
                       object: object,
-                      widthController: _widthController,
-                      heightController: _heightController,
                       onApply: (width, height) =>
                           _resizeSelected(object, width, height),
                     ),
@@ -2168,10 +2163,7 @@ class _AnimationDialogState extends State<_AnimationDialog> {
 /// that has finite bounds. Owns its own controllers so the fields are always
 /// editable independently of canvas-driven document updates.
 class _SizeEditor extends StatefulWidget {
-  const _SizeEditor({
-    required this.object,
-    required this.onApply,
-  });
+  const _SizeEditor({super.key, required this.object, required this.onApply});
 
   final GeometryObject object;
   final void Function(double width, double height) onApply;
@@ -2184,17 +2176,11 @@ class _SizeEditorState extends State<_SizeEditor> {
   final _widthController = TextEditingController();
   final _heightController = TextEditingController();
   bool _focused = false;
-  bool _pendingSync = true; // true until the next frame so we initialize
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() => _pendingSync = false);
-        _syncFromObject(force: true);
-      }
-    });
+    _syncFromObject(force: true);
   }
 
   @override
@@ -2204,7 +2190,6 @@ class _SizeEditorState extends State<_SizeEditor> {
     // is actively editing we defer syncing until focus is lost, so a
     // canvas-driven resize never clobbers the in-progress edit.
     if (widget.object.id != oldWidget.object.id) {
-      _pendingSync = true;
       _syncFromObject(force: true);
     }
   }
@@ -2236,18 +2221,82 @@ class _SizeEditorState extends State<_SizeEditor> {
     _syncFromObject(force: true);
   }
 
-  String _stripZero(String v) => v.endsWith('.00') ? v.substring(0, v.length - 3) : v;
-
-  void _nextField(TextEditingController from, TextEditingController to) {
-    _apply();
-    FocusScope.of(context).nextFocus();
-  }
-}
-
-
-          child: const Text('Apply', style: TextStyle(fontSize: 10)),
-        ),
-      ],
+  @override
+  Widget build(BuildContext context) {
+    final bounds = widget.object.bounds;
+    if (bounds == null) return const SizedBox.shrink();
+    return Focus(
+      onFocusChange: (hasFocus) => setState(() => _focused = hasFocus),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'W',
+            style: TextStyle(fontSize: 10, color: Color(0xff526576)),
+          ),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 56,
+            child: TextField(
+              controller: _widthController,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace'),
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
+                ),
+                border: OutlineInputBorder(),
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+              ],
+              onSubmitted: (_) {
+                _apply();
+                FocusScope.of(context).nextFocus();
+              },
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text(
+            'H',
+            style: TextStyle(fontSize: 10, color: Color(0xff526576)),
+          ),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 56,
+            child: TextField(
+              controller: _heightController,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace'),
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
+                ),
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (_) {
+                _apply();
+                // Lose focus back to the canvas so the editor stays in sync.
+                final node = FocusScope.of(context);
+                if (node.hasFocus) node.unfocus();
+              },
+            ),
+          ),
+          const SizedBox(width: 6),
+          FilledButton(
+            onPressed: _apply,
+            style: FilledButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+            child: const Text('Apply', style: TextStyle(fontSize: 10)),
+          ),
+        ],
+      ),
     );
   }
 }

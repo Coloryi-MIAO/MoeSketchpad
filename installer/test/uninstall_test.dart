@@ -56,11 +56,13 @@ void main() {
       expect(
         steps,
         containsAllInOrder([
-          UninstallStep.removingFiles,
-          UninstallStep.removingShortcuts,
+          // Registry + PATH + shortcuts run before the install dir is removed
+          // so the running uninstaller exe stays on disk for child processes.
           UninstallStep.removingAssociation,
+          UninstallStep.removingShortcuts,
           UninstallStep.removingPath,
           UninstallStep.removingRegistry,
+          UninstallStep.removingFiles,
           UninstallStep.complete,
         ]),
       );

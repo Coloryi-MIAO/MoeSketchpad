@@ -68,21 +68,27 @@ class Uninstaller {
       );
     }
 
-    // 1. Remove the install directory itself. Best-effort: missing files and
-    //    locked processes (including this running installer) are skipped.
-    tick(UninstallStep.removingFiles, 0.12);
-    try {
-      await _deleteTree(directory);
-    } catch (e) {
-      tick(UninstallStep.removingFiles, 0.12, e);
-    }
-
+    // 1. Remove the .moesp file association. (Run before touching the install
+    //    directory so the running installer exe stays on disk for the child
+    //    reg.exe processes that follow.)
     final registeredPath = manifest?.registeredPath ?? false;
     final desktopShortcut = manifest?.desktopShortcut ?? true;
     final startMenuShortcut = manifest?.startMenuShortcut ?? true;
 
-    // 2. Remove shortcuts (only when the launcher existed; paths are standard).
-    tick(UninstallStep.removingShortcuts, 0.34);
+    tick(UninstallStep.removingAssociation, 0.15);
+    try {
+      await _run('reg.exe', ['delete', r'HKCU\Software\Classes\.moesp', '/f']);
+      await _run('reg.exe', [
+        'delete',
+        r'HKCU\Software\Classes\MoeSketchpad.Document',
+        '/f',
+      ]);
+    } catch (e) {
+      tick(UninstallStep.removingAssociation, 0.15, e);
+    }
+
+    // 2. Remove shortcuts.
+    tick(UninstallStep.removingShortcuts, 0.30);
     try {
       final profile = Platform.environment['USERPROFILE'];
       final appData = Platform.environment['APPDATA'];
@@ -118,38 +124,35 @@ class Uninstaller {
         } catch (_) {}
       }
     } catch (e) {
-      tick(UninstallStep.removingShortcuts, 0.34, e);
+      tick(UninstallStep.removingShortcuts, 0.30, e);
     }
 
-    // 3. Remove the .moesp file association.
-    tick(UninstallStep.removingAssociation, 0.52);
-    try {
-      await _run('reg.exe', ['delete', r'HKCU\Software\Classes\.moesp', '/f']);
-      await _run('reg.exe', [
-        'delete',
-        r'HKCU\Software\Classes\MoeSketchpad.Document',
-        '/f',
-      ]);
-    } catch (e) {
-      tick(UninstallStep.removingAssociation, 0.52, e);
-    }
-
-    // 4. Remove the install dir from the user PATH.
-    tick(UninstallStep.removingPath, 0.70);
+    // 3. Remove the install dir from the user PATH.
+    tick(UninstallStep.removingPath, 0.45);
     if (registeredPath) {
       try {
         await _removeFromPath(installDir);
       } catch (e) {
-        tick(UninstallStep.removingPath, 0.70, e);
+        tick(UninstallStep.removingPath, 0.45, e);
       }
     }
 
-    // 5. Remove the Add/Remove Programs entry.
-    tick(UninstallStep.removingRegistry, 0.85);
+    // 4. Remove the Add/Remove Programs entry.
+    tick(UninstallStep.removingRegistry, 0.60);
     try {
       await _run('reg.exe', ['delete', _arpKey, '/f']);
     } catch (e) {
-      tick(UninstallStep.removingRegistry, 0.85, e);
+      tick(UninstallStep.removingRegistry, 0.60, e);
+    }
+
+    // 5. Remove the install directory itself. This runs last because deleting
+    //    the running installer exe mid-process can break child-process spawning
+    //    on Windows. Best-effort: locked files (e.g. the live exe) are skipped.
+    tick(UninstallStep.removingFiles, 0.80);
+    try {
+      await _deleteTree(directory);
+    } catch (e) {
+      tick(UninstallStep.removingFiles, 0.80, e);
     }
 
     tick(UninstallStep.complete, 1.0);
