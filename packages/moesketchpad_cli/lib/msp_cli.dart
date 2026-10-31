@@ -37,11 +37,16 @@ class MspCli {
               'name': 'msp',
               'version': '0.1.0',
               'mspFormat': MspCodec.currentVersion,
+              'author': 'Coloryi-MIAO',
+              'license': 'GPL-3.0-only',
+              'repository': 'https://github.com/Coloryi-MIAO/MoeSketchpad',
             }),
           );
         } else {
           stdout.writeln(
-            'moesp 0.1.0 (MSP format v${MspCodec.currentVersion})',
+            'moesp 0.1.0 (MSP format v${MspCodec.currentVersion})\n'
+            'Author: Coloryi-MIAO · License: GPL-3.0-only\n'
+            'https://github.com/Coloryi-MIAO/MoeSketchpad',
           );
         }
         return exitSuccess;

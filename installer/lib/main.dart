@@ -1,17 +1,61 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
-import 'package:window_manager/window_manager.dart';
 
+import 'package:moesketchpad_installer/installer_strings.dart';
 import 'package:moesketchpad_installer/package_archive.dart';
+import 'package:moesketchpad_installer/window_chrome.dart';
 
 const _payloadAsset = 'assets/moesketchpad-windows.zip';
+
+/// Installer version reported in the custom caption bar.
+const kInstallerVersion = '1.0.0';
+
 const _accent = Color(0xff386f9f);
+
+/// Surface behind the installer content pane.
+const _canvasColor = Color(0xfff7f9fb);
+
+/// Brand rail gradient endpoints.
+const _brandTop = Color(0xff22415c);
+const _brandBottom = Color(0xff3a7aa8);
+
+/// Text colors shared by the content pane.
+const _inkStrong = Color(0xff243543);
+const _inkSoft = Color(0xff64748a);
+
+/// Broadcasts WM_SETTINGCHANGE so Explorer and newly launched shells notice the
+/// updated user PATH without requiring the user to sign out.
+const _broadcastEnvironmentScript = r'''
+$signature = @"
+[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+public static extern IntPtr SendMessageTimeout(
+    IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam,
+    uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+"@
+$type = Add-Type -MemberDefinition $signature -Name EnvBroadcast -Namespace Moe -PassThru
+$result = [UIntPtr]::Zero
+[void]$type::SendMessageTimeout([IntPtr]65535, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)
+exit 0
+''';
+
+/// Encodes a PowerShell script as UTF-16LE base64 for `-EncodedCommand`, which
+/// avoids all quoting hazards of passing the script through `-Command`.
+String _encodePowerShell(String script) {
+  final bytes = <int>[];
+  for (final unit in script.codeUnits) {
+    bytes
+      ..add(unit & 0xff)
+      ..add((unit >> 8) & 0xff);
+  }
+  return base64.encode(bytes);
+}
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,18 +112,30 @@ class _InstallerPageState extends State<InstallerPage> {
   late final TextEditingController _path;
   _InstallStage _stage = _InstallStage.welcome;
   double _progress = 0;
-  String _status = 'Ready to install';
+
+  /// Progress caption for the active stage, in the selected language.
+  String _status = InstallerStrings('zh').statusReady;
   String? _error;
   bool _desktopShortcut = true;
   bool _startMenuShortcut = true;
   bool _launchAfterInstall = true;
   String _selectedLanguage = 'zh'; // zh or en
-  String? _selectedMoespPath;
+  String _selectedMoespMode = 'auto'; // auto or skip
+
+  /// Copy table for the currently selected interface language.
+  InstallerStrings get _strings => InstallerStrings(_selectedLanguage);
 
   @override
   void initState() {
     super.initState();
-    _setupWindow();
+    // Follow the system UI language when it is one the installer speaks.
+    final systemLanguage = Platform.localeName
+        .split(RegExp('[-_]'))
+        .first
+        .toLowerCase();
+    if (InstallerStrings.supported.contains(systemLanguage)) {
+      _selectedLanguage = systemLanguage;
+    }
     _path = TextEditingController(
       text:
           widget.installDir ??
@@ -93,17 +149,6 @@ class _InstallerPageState extends State<InstallerPage> {
     );
   }
 
-  Future<void> _setupWindow() async {
-    try {
-      await WindowManager.instance.setWindowTitleBarVisibility(false);
-      await WindowManager.instance.setFullScreen(true);
-      await WindowManager.instance.setResizable(false);
-      await WindowManager.instance.setWindowSize(const Size(600, 700));
-    } on Object {
-      // WindowManager may not be available on all platforms
-    }
-  }
-
   @override
   void dispose() {
     _path.dispose();
@@ -111,11 +156,12 @@ class _InstallerPageState extends State<InstallerPage> {
   }
 
   Future<void> _install() async {
+    final strings = _strings;
     final destination = p.normalize(_path.text.trim());
     if (destination.isEmpty ||
         p.basename(destination).toLowerCase() != 'moesketchpad') {
       setState(() {
-        _error = 'Choose a folder whose final name is MoeSketchpad.';
+        _error = strings.folderInvalid;
       });
       return;
     }
@@ -123,11 +169,11 @@ class _InstallerPageState extends State<InstallerPage> {
       _stage = _InstallStage.installing;
       _error = null;
       _progress = 0.08;
-      _status = 'Preparing installation…';
+      _status = strings.statusPreparing;
     });
     try {
       if (widget.waitPid case final pid?) {
-        setState(() => _status = 'Waiting for MoeSketchpad to close…');
+        setState(() => _status = strings.statusWaiting);
         await _waitForProcess(pid);
       }
       final running = await Process.run('tasklist.exe', [
@@ -138,17 +184,17 @@ class _InstallerPageState extends State<InstallerPage> {
         '/NH',
       ]);
       if (running.exitCode != 0) {
-        throw StateError('Could not check whether MoeSketchpad is running.');
+        throw StateError(strings.errorRunning);
       }
       if ((running.stdout as String).toLowerCase().contains(
         '"moesketchpad.exe"',
       )) {
-        throw StateError('Close MoeSketchpad before installing or updating.');
+        throw StateError(strings.errorCloseFirst);
       }
 
       setState(() {
         _progress = 0.2;
-        _status = 'Verifying installation package…';
+        _status = strings.statusVerifying;
       });
       final payload = await rootBundle.load(_payloadAsset);
       final archive = ZipDecoder().decodeBytes(payload.buffer.asUint8List());
@@ -167,23 +213,24 @@ class _InstallerPageState extends State<InstallerPage> {
         if (i % 8 == 0 || i == entries.length - 1) {
           setState(() {
             _progress = 0.25 + 0.65 * (i + 1) / entries.length;
-            _status = 'Installing files (${i + 1}/${entries.length})…';
+            _status = strings.statusInstalling(i + 1, entries.length);
           });
         }
       }
 
       setState(() {
         _progress = 0.93;
-        _status = 'Creating shortcuts and file association…';
+        _status = strings.statusIntegration;
       });
       await _registerIntegration(
         installDir.path,
         desktopShortcut: _desktopShortcut,
         startMenuShortcut: _startMenuShortcut,
+        registerPath: _selectedMoespMode == 'auto',
       );
       setState(() {
         _progress = 1;
-        _status = 'Installation complete';
+        _status = strings.statusComplete;
         _stage = _InstallStage.complete;
       });
       if (_launchAfterInstall) {
@@ -198,13 +245,14 @@ class _InstallerPageState extends State<InstallerPage> {
       if (!mounted) return;
       setState(() {
         _stage = _InstallStage.failed;
-        _status = 'Installation failed';
+        _status = strings.statusFailed;
         _error = '$error';
       });
     }
   }
 
   Future<void> _waitForProcess(int pid) async {
+    final strings = _strings;
     for (var attempt = 0; attempt < 180; attempt++) {
       final result = await Process.run('tasklist.exe', [
         '/FI',
@@ -214,20 +262,19 @@ class _InstallerPageState extends State<InstallerPage> {
         '/NH',
       ]);
       if (result.exitCode != 0) {
-        throw StateError(
-          'Could not wait for the running application to close.',
-        );
+        throw StateError(strings.errorWaitClose);
       }
       if (!(result.stdout as String).contains('"$pid"')) return;
       await Future<void>.delayed(const Duration(seconds: 1));
     }
-    throw TimeoutException('MoeSketchpad did not close within three minutes.');
+    throw TimeoutException(strings.errorTimeout);
   }
 
   Future<void> _registerIntegration(
     String installDir, {
     required bool desktopShortcut,
     required bool startMenuShortcut,
+    required bool registerPath,
   }) async {
     await _run('reg.exe', [
       'add',
@@ -281,44 +328,59 @@ class _InstallerPageState extends State<InstallerPage> {
       '/f',
     ]);
 
-    final userPathResult = await Process.run('reg.exe', [
-      'query',
-      r'HKCU\Environment',
-      '/v',
-      'Path',
-    ]);
-    if (userPathResult.exitCode != 0 && userPathResult.exitCode != 1) {
-      throw StateError('Could not read the current user PATH.');
-    }
-    final existingPath = RegExp(
-      r'^\s*Path\s+REG_\w+\s+(.*)$',
-      multiLine: true,
-    ).firstMatch(userPathResult.stdout as String)?.group(1);
-    final pathEntries = (existingPath ?? '')
-        .split(';')
-        .where((entry) => entry.isNotEmpty);
-    if (!pathEntries.any(
-      (entry) => p.equals(p.normalize(entry), p.normalize(installDir)),
-    )) {
-      final newPath = [...pathEntries, installDir].join(';');
-      await _run('reg.exe', [
-        'add',
+    if (registerPath) {
+      final userPathResult = await Process.run('reg.exe', [
+        'query',
         r'HKCU\Environment',
         '/v',
         'Path',
-        '/t',
-        'REG_EXPAND_SZ',
-        '/d',
-        newPath,
-        '/f',
       ]);
+      if (userPathResult.exitCode != 0 && userPathResult.exitCode != 1) {
+        throw StateError(_strings.errorPathRead);
+      }
+      final existingPath = RegExp(
+        r'^\s*Path\s+REG_\w+\s+(.*)$',
+        multiLine: true,
+      ).firstMatch(userPathResult.stdout as String)?.group(1);
+      final pathEntries = (existingPath ?? '')
+          .split(';')
+          .where((entry) => entry.isNotEmpty);
+      final alreadyRegistered = pathEntries.any(
+        (entry) => p.equals(p.normalize(entry), p.normalize(installDir)),
+      );
+      if (!alreadyRegistered) {
+        final newPath = [...pathEntries, installDir].join(';');
+        await _run('reg.exe', [
+          'add',
+          r'HKCU\Environment',
+          '/v',
+          'Path',
+          '/t',
+          'REG_EXPAND_SZ',
+          '/d',
+          newPath,
+          '/f',
+        ]);
+      }
+      // Broadcast WM_SETTINGCHANGE so newly launched shells pick up the new
+      // PATH without requiring a sign-out. Failures here are non-fatal.
+      try {
+        await _run('powershell.exe', [
+          '-NoProfile',
+          '-NonInteractive',
+          '-EncodedCommand',
+          _encodePowerShell(_broadcastEnvironmentScript),
+        ]);
+      } on Object {
+        // Non-fatal: PATH is stored even if the broadcast fails.
+      }
     }
 
     final profile = Platform.environment['USERPROFILE'];
     final appData = Platform.environment['APPDATA'];
     if ((desktopShortcut && profile == null) ||
         (startMenuShortcut && appData == null)) {
-      throw StateError('Could not locate the current user shortcut folders.');
+      throw StateError(_strings.errorShortcutFolders);
     }
     final escapedInstall = installDir.replaceAll("'", "''");
     final shortcuts = <String>[
@@ -364,174 +426,225 @@ class _InstallerPageState extends State<InstallerPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 940, maxHeight: 620),
-        child: Card(
-          elevation: 2,
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
+  Widget build(BuildContext context) {
+    final strings = _strings;
+    return Scaffold(
+      backgroundColor: _canvasColor,
+      body: Column(
+        children: [
+          // Frameless windows have no native caption, so Flutter draws one.
+          WindowChrome(
+            title: strings.windowTitle,
+            subtitle:
+                '${strings.versionLabel} $kInstallerVersion · ${strings.authorLabel}',
           ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 300,
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xff244863), Color(0xff397aa7)],
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(30),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.gesture_rounded,
-                          color: Colors.white,
-                          size: 42,
-                        ),
-                        const Spacer(),
-                        const Text(
-                          '萌板',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 38,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const Text(
-                          'MOESKETCHPAD',
-                          style: TextStyle(
-                            color: Color(0xffcce4f2),
-                            fontSize: 13,
-                            letterSpacing: 2.6,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Text(
-                          'A calm, precise space for ideas and geometry.',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.84),
-                            height: 1.5,
-                          ),
-                        ),
-                        const Spacer(),
-                        const Text(
-                          'GPL-3.0-only · Coloryi-MIAO',
-                          style: TextStyle(
-                            color: Color(0xffcce4f2),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+          Expanded(
+            child: Row(
+              children: [
+                _brandPane(strings),
+                Expanded(child: _contentPane(strings)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Left rail: product mark, tagline and license footer.
+  Widget _brandPane(InstallerStrings strings) => SizedBox(
+    width: 264,
+    child: DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_brandTop, _brandBottom],
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(32, 36, 32, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: const Icon(
+                Icons.gesture_rounded,
+                color: Colors.white,
+                size: 29,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              strings.brandName,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 32,
+                height: 1.1,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              strings.brandLatin,
+              style: const TextStyle(
+                color: Color(0xffbcd9ec),
+                fontSize: 11.5,
+                letterSpacing: 2.4,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              strings.brandTagline,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.86),
+                fontSize: 13,
+                height: 1.6,
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Text(
+                '${strings.licenseLabel} · ${strings.authorLabel}',
+                style: const TextStyle(
+                  color: Color(0xffdceaf4),
+                  fontSize: 10.5,
                 ),
               ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(34, 30, 34, 26),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    child: _buildStage(),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     ),
   );
 
-  Widget _buildStage() => switch (_stage) {
-    _InstallStage.welcome => _welcome(),
-    _InstallStage.installing => _installing(),
-    _InstallStage.complete => _complete(),
-    _InstallStage.failed => _failed(),
+  /// Right pane: the stage-specific content, on a plain surface.
+  Widget _contentPane(InstallerStrings strings) => Padding(
+    padding: const EdgeInsets.fromLTRB(36, 30, 36, 26),
+    child: AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: _buildStage(strings),
+    ),
+  );
+
+  Widget _buildStage(InstallerStrings strings) => switch (_stage) {
+    _InstallStage.welcome => _welcome(strings),
+    _InstallStage.installing => _installing(strings),
+    _InstallStage.complete => _complete(strings),
+    _InstallStage.failed => _failed(strings),
   };
 
-  Widget _welcome() => Column(
+  Widget _welcome(InstallerStrings strings) => Column(
     key: const ValueKey('welcome'),
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text('Install MoeSketchpad', style: _titleStyle),
+      Text(strings.welcomeHeading, style: _titleStyle),
       const SizedBox(height: 8),
-      const Text(
-        'Install the geometry workspace and its command-line tools for your Windows account.',
-        style: TextStyle(color: Color(0xff667384), height: 1.45),
-      ),
-      const SizedBox(height: 26),
-      const Text('Installation folder'),
-      const SizedBox(height: 8),
-      TextField(
-        controller: _path,
-        decoration: const InputDecoration(
-          prefixIcon: Icon(Icons.folder_outlined),
-          border: OutlineInputBorder(),
-          isDense: true,
+      Text(strings.welcomeSubtitle, style: _bodyStyle),
+      const SizedBox(height: 24),
+      Expanded(
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _fieldLabel(strings.folderLabel),
+              const SizedBox(height: 7),
+              TextField(
+                controller: _path,
+                style: const TextStyle(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: strings.folderHint,
+                  prefixIcon: const Icon(Icons.folder_outlined, size: 18),
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 13,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              _fieldLabel(strings.languageLabel),
+              const SizedBox(height: 7),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedLanguage,
+                style: const TextStyle(fontSize: 13, color: _inkStrong),
+                decoration: _dropdownDecoration,
+                items: [
+                  for (final code in InstallerStrings.supported)
+                    DropdownMenuItem(
+                      value: code,
+                      child: Text(InstallerStrings(code).languageName),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() {
+                    _selectedLanguage = value;
+                    // Refresh the progress caption into the new language so a
+                    // mid-flow switch never leaves stale text behind.
+                    _status = InstallerStrings(value).statusReady;
+                  });
+                },
+              ),
+              const SizedBox(height: 18),
+              _fieldLabel(strings.moespLabel),
+              const SizedBox(height: 7),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedMoespMode,
+                style: const TextStyle(fontSize: 13, color: _inkStrong),
+                decoration: _dropdownDecoration,
+                items: [
+                  DropdownMenuItem(
+                    value: 'auto',
+                    child: Text(strings.moespAuto),
+                  ),
+                  DropdownMenuItem(
+                    value: 'skip',
+                    child: Text(strings.moespSkip),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) setState(() => _selectedMoespMode = value);
+                },
+              ),
+              const SizedBox(height: 10),
+              _option(strings.optionDesktop, _desktopShortcut, (v) {
+                setState(() => _desktopShortcut = v);
+              }),
+              _option(strings.optionStartMenu, _startMenuShortcut, (v) {
+                setState(() => _startMenuShortcut = v);
+              }),
+              _option(strings.optionLaunch, _launchAfterInstall, (v) {
+                setState(() => _launchAfterInstall = v);
+              }),
+              if (_error != null) _errorBanner(_error!),
+            ],
+          ),
         ),
       ),
-      const SizedBox(height: 16),
-      DropdownButtonFormField<String>(
-        value: _selectedLanguage,
-        decoration: const InputDecoration(
-          labelText: 'Language',
-          border: OutlineInputBorder(),
-          isDense: true,
-        ),
-        items: const [
-          DropdownMenuItem(value: 'zh', child: Text('简体中文')),
-          DropdownMenuItem(value: 'en', child: Text('English')),
-        ],
-        onChanged: (value) {
-          if (value != null) setState(() => _selectedLanguage = value);
-        },
-      ),
-      const SizedBox(height: 16),
-      DropdownButtonFormField<String>(
-        value: _selectedMoespPath,
-        decoration: const InputDecoration(
-          labelText: 'moesp command location',
-          border: OutlineInputBorder(),
-          isDense: true,
-        ),
-        items: const [
-          DropdownMenuItem(value: 'auto', child: Text('Auto-register (recommended)')),
-          DropdownMenuItem(value: 'manual', child: Text('Manually specify path')),
-        ],
-        onChanged: (value) {
-          if (value != null) setState(() => _selectedMoespPath = value);
-        },
-      ),
-      const SizedBox(height: 16),
-      _option('Create a desktop shortcut', _desktopShortcut, (v) {
-        setState(() => _desktopShortcut = v);
-      }),
-      _option('Add to Start menu', _startMenuShortcut, (v) {
-        setState(() => _startMenuShortcut = v);
-      }),
-      _option('Launch after installation', _launchAfterInstall, (v) {
-        setState(() => _launchAfterInstall = v);
-      }),
-      if (_error != null) _errorBanner(_error!),
-      const Spacer(),
+      const SizedBox(height: 14),
       Row(
         children: [
           const Spacer(),
           FilledButton.icon(
             onPressed: _install,
-            icon: const Icon(Icons.arrow_forward_rounded),
-            label: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Text('Install'),
+            icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+            label: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Text(strings.install),
             ),
           ),
         ],
@@ -542,99 +655,124 @@ class _InstallerPageState extends State<InstallerPage> {
   Widget _option(String label, bool value, ValueChanged<bool> onChanged) =>
       CheckboxListTile(
         dense: true,
+        visualDensity: VisualDensity.compact,
         contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
         title: Text(label, style: const TextStyle(fontSize: 13)),
         value: value,
         onChanged: (next) => onChanged(next ?? false),
       );
 
-  Widget _installing() => Column(
+  Widget _installing(InstallerStrings strings) => Column(
     key: const ValueKey('installing'),
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text('Setting up your workspace', style: _titleStyle),
+      Text(strings.installingHeading, style: _titleStyle),
       const Spacer(),
       Center(
         child: SizedBox(
-          width: 120,
-          height: 120,
+          width: 128,
+          height: 128,
           child: Stack(
             alignment: Alignment.center,
             children: [
               SizedBox(
-                width: 112,
-                height: 112,
+                width: 118,
+                height: 118,
                 child: CircularProgressIndicator(
                   value: _progress,
                   strokeWidth: 5,
-                  backgroundColor: const Color(0xffe7edf2),
+                  strokeCap: StrokeCap.round,
+                  backgroundColor: const Color(0xffe4eaf0),
                 ),
               ),
-              Icon(Icons.gesture_rounded, size: 40, color: _accent),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.gesture_rounded, size: 30, color: _accent),
+                  const SizedBox(height: 4),
+                  Text(
+                    strings.percent((_progress * 100).round()),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _inkSoft,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
       ),
-      const SizedBox(height: 28),
-      Center(child: Text(_status)),
+      const SizedBox(height: 26),
+      Center(
+        child: Text(
+          _status,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 13, color: _inkSoft),
+        ),
+      ),
       const Spacer(),
     ],
   );
 
-  Widget _complete() => Column(
+  Widget _complete(InstallerStrings strings) => Column(
     key: const ValueKey('complete'),
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const Icon(
         Icons.check_circle_rounded,
         color: Color(0xff2d8b68),
-        size: 48,
+        size: 46,
       ),
       const SizedBox(height: 16),
-      Text('You’re all set', style: _titleStyle),
-      const SizedBox(height: 8),
-      const Text(
-        'MoeSketchpad and the moesp command are ready. Double-click a .moesp document to open it.',
-        style: TextStyle(color: Color(0xff667384), height: 1.5),
-      ),
+      Text(strings.completeHeading, style: _titleStyle),
+      const SizedBox(height: 10),
+      Text(strings.completeBody, style: _bodyStyle),
       const Spacer(),
       Align(
         alignment: Alignment.centerRight,
         child: FilledButton(
           onPressed: () => exit(0),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-            child: Text('Finish'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+            child: Text(strings.finish),
           ),
         ),
       ),
     ],
   );
 
-  Widget _failed() => Column(
+  Widget _failed(InstallerStrings strings) => Column(
     key: const ValueKey('failed'),
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const Icon(
         Icons.error_outline_rounded,
         color: Color(0xffbb4741),
-        size: 48,
+        size: 46,
       ),
       const SizedBox(height: 16),
-      Text('Could not finish setup', style: _titleStyle),
+      Text(strings.failedHeading, style: _titleStyle),
       const SizedBox(height: 12),
       Expanded(
-        child: SingleChildScrollView(child: SelectableText(_error ?? _status)),
+        child: SingleChildScrollView(
+          child: SelectableText(
+            _error ?? _status,
+            style: const TextStyle(fontSize: 12.5, color: _inkSoft),
+          ),
+        ),
       ),
       const SizedBox(height: 18),
       Row(
         children: [
-          TextButton(onPressed: () => exit(1), child: const Text('Cancel')),
+          TextButton(onPressed: () => exit(1), child: Text(strings.cancel)),
           const Spacer(),
           FilledButton.icon(
             onPressed: () => setState(() => _stage = _InstallStage.welcome),
-            icon: const Icon(Icons.refresh),
-            label: const Text('Try again'),
+            icon: const Icon(Icons.refresh, size: 18),
+            label: Text(strings.retry),
           ),
         ],
       ),
@@ -643,17 +781,49 @@ class _InstallerPageState extends State<InstallerPage> {
 
   Widget _errorBanner(String message) => Padding(
     padding: const EdgeInsets.only(top: 12),
-    child: Text(
-      message,
-      style: const TextStyle(color: Color(0xffa53d39), fontSize: 12),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(
+          Icons.warning_amber_rounded,
+          size: 16,
+          color: Color(0xffa53d39),
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            message,
+            style: const TextStyle(color: Color(0xffa53d39), fontSize: 12),
+          ),
+        ),
+      ],
     ),
   );
 
-  TextStyle get _titleStyle => const TextStyle(
-    fontSize: 25,
-    fontWeight: FontWeight.w700,
-    color: Color(0xff263847),
+  Widget _fieldLabel(String text) => Text(
+    text,
+    style: const TextStyle(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w600,
+      color: _inkStrong,
+    ),
   );
+
+  InputDecoration get _dropdownDecoration => const InputDecoration(
+    border: OutlineInputBorder(),
+    isDense: true,
+    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+  );
+
+  TextStyle get _titleStyle => const TextStyle(
+    fontSize: 24,
+    fontWeight: FontWeight.w700,
+    height: 1.2,
+    color: _inkStrong,
+  );
+
+  TextStyle get _bodyStyle =>
+      const TextStyle(fontSize: 13, color: _inkSoft, height: 1.55);
 }
 
 extension<T> on Iterable<T> {

@@ -230,12 +230,21 @@ class SketchpadCanvasState extends State<SketchpadCanvas> {
         final canvasState = context.read<CanvasBloc>().state;
         final guideIndex = canvasState.guides.indexWhere((guide) {
           final screen = guide.vertical
-              ? Offset(canvasState.worldToScreen(Point2(guide.position, 0)).dx, 0)
-              : Offset(0, canvasState.worldToScreen(Point2(0, guide.position)).dy);
-          return (screen - details.localPosition).distance < 8 / canvasState.zoom;
+              ? Offset(
+                  canvasState.worldToScreen(Point2(guide.position, 0)).dx,
+                  0,
+                )
+              : Offset(
+                  0,
+                  canvasState.worldToScreen(Point2(0, guide.position)).dy,
+                );
+          return (screen - details.localPosition).distance <
+              8 / canvasState.zoom;
         });
         if (guideIndex >= 0) {
-          context.read<CanvasBloc>().selectGuide(canvasState.guides[guideIndex]);
+          context.read<CanvasBloc>().selectGuide(
+            canvasState.guides[guideIndex],
+          );
           selection.clear();
         } else if (hit == null) {
           context.read<CanvasBloc>().selectGuide(null);
@@ -678,19 +687,18 @@ class SketchpadCanvasState extends State<SketchpadCanvas> {
     // object is selected and the pointer starts on a handle.
     if (selection.ids.length == 1) {
       final obj = document.objectById(selection.ids.single);
-      if (obj != null &&
-          obj.bounds != null &&
-          obj.visible &&
-          !obj.locked) {
-        final handle = _hitTransformHandle(
-          details.localPosition,
-          obj,
-          canvas,
-        );
+      if (obj != null && obj.bounds != null && obj.visible && !obj.locked) {
+        final handle = _hitTransformHandle(details.localPosition, obj, canvas);
         if (handle != null) {
           context.read<SelectionBloc>().replace(obj.id);
-          _startTransform(obj.id, obj, handle, details.localPosition, canvas,
-              document);
+          _startTransform(
+            obj.id,
+            obj,
+            handle,
+            details.localPosition,
+            canvas,
+            document,
+          );
           setState(() {});
           return;
         }
@@ -772,10 +780,12 @@ class SketchpadCanvasState extends State<SketchpadCanvas> {
           final original = _transformOriginalPoints[i]!;
           final dx = original.x - _transformCenter.x;
           final dy = original.y - _transformCenter.y;
-          transformed.add(Point2(
-            _transformCenter.x + dx * cos - dy * sin,
-            _transformCenter.y + dx * sin + dy * cos,
-          ));
+          transformed.add(
+            Point2(
+              _transformCenter.x + dx * cos - dy * sin,
+              _transformCenter.y + dx * sin + dy * cos,
+            ),
+          );
         }
         setState(() {
           _dragDocument = _dragDocument!.withObject(
@@ -824,10 +834,12 @@ class SketchpadCanvasState extends State<SketchpadCanvas> {
       final transformed = <Point2>[];
       for (var i = 0; i < object.points.length; i++) {
         final original = _transformOriginalPoints[i]!;
-        transformed.add(Point2(
-          _transformCenter.x + (original.x - _transformCenter.x) * sx,
-          _transformCenter.y + (original.y - _transformCenter.y) * sy,
-        ));
+        transformed.add(
+          Point2(
+            _transformCenter.x + (original.x - _transformCenter.x) * sx,
+            _transformCenter.y + (original.y - _transformCenter.y) * sy,
+          ),
+        );
       }
       setState(() {
         _dragDocument = _dragDocument!.withObject(
@@ -1030,8 +1042,10 @@ class SketchpadCanvasState extends State<SketchpadCanvas> {
     _transformCenter = bounds.center;
     _transformStartScreen = startScreen;
     final centerScreen = canvas.worldToScreen(_transformCenter);
-    _transformStartAngle =
-        math.atan2(startScreen.dy - centerScreen.dy, startScreen.dx - centerScreen.dx);
+    _transformStartAngle = math.atan2(
+      startScreen.dy - centerScreen.dy,
+      startScreen.dx - centerScreen.dx,
+    );
     _transformOriginalPoints = {
       for (var i = 0; i < object.points.length; i++) i: object.points[i],
     };
@@ -1314,8 +1328,10 @@ class SketchpadCanvasState extends State<SketchpadCanvas> {
                                                     showOrigin: true,
                                                     transformObjectId:
                                                         _transformObjectId,
-                                                    transformHandle: _transformHandle,
-                                                    transformMode: _transformMode,
+                                                    transformHandle:
+                                                        _transformHandle,
+                                                    transformMode:
+                                                        _transformMode,
                                                   ),
                                                 ),
                                               ),

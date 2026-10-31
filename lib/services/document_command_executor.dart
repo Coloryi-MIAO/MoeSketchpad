@@ -106,8 +106,14 @@ class DocumentCommandExecutor {
           kind: GeometryKind.arc,
           points: [
             center,
-            Point2(center.x + radius * math.cos(start), center.y + radius * math.sin(start)),
-            Point2(center.x + radius * math.cos(end), center.y + radius * math.sin(end)),
+            Point2(
+              center.x + radius * math.cos(start),
+              center.y + radius * math.sin(start),
+            ),
+            Point2(
+              center.x + radius * math.cos(end),
+              center.y + radius * math.sin(end),
+            ),
           ],
           label: options['label'],
         );
@@ -139,14 +145,24 @@ class DocumentCommandExecutor {
           label: options['label'],
         );
       case 'conic':
-        _rejectUnknown(options, {'x', 'y', 'a', 'b', 'rotation', 'type', 'label'});
+        _rejectUnknown(options, {
+          'x',
+          'y',
+          'a',
+          'b',
+          'rotation',
+          'type',
+          'label',
+        });
         final center = Point2(_number(options, 'x'), _number(options, 'y'));
         final a = _number(options, 'a', fallback: 2);
         final b = _number(options, 'b', fallback: 1);
         final rotation = _number(options, 'rotation', fallback: 0);
         final type = options['type'] ?? 'ellipse';
         if (!const {'ellipse', 'parabola', 'hyperbola'}.contains(type)) {
-          throw const FormatException('Conic type must be ellipse, parabola or hyperbola.');
+          throw const FormatException(
+            'Conic type must be ellipse, parabola or hyperbola.',
+          );
         }
         object = GeometryObject(
           id: 'conic-$timestamp',
@@ -162,8 +178,15 @@ class DocumentCommandExecutor {
       case 'function':
         _rejectUnknown(options, {'kind', 'expr', 'x-min', 'x-max', 'label'});
         final fKind = options['kind'] ?? 'explicit';
-        if (!const {'explicit', 'parametric', 'polar', 'implicit'}.contains(fKind)) {
-          throw const FormatException('Function kind must be explicit, parametric, polar or implicit.');
+        if (!const {
+          'explicit',
+          'parametric',
+          'polar',
+          'implicit',
+        }.contains(fKind)) {
+          throw const FormatException(
+            'Function kind must be explicit, parametric, polar or implicit.',
+          );
         }
         final expression = options['expr'] ?? '';
         if (expression.isEmpty) {
@@ -210,7 +233,9 @@ class DocumentCommandExecutor {
           params: {'edges': options['edges'] ?? '0-1,1-2,2-3,3-0'},
         );
       default:
-        throw FormatException('Unsupported create primitive "$kind". Supported: point, segment, line, ray, vector, circle, arc, triangle, polygon, conic, function, coordinate, solid.');
+        throw FormatException(
+          'Unsupported create primitive "$kind". Supported: point, segment, line, ray, vector, circle, arc, triangle, polygon, conic, function, coordinate, solid.',
+        );
     }
     final updated = document.withObject(object);
     return DocumentCommandResult(

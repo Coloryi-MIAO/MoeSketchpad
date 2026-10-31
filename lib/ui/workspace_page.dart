@@ -33,6 +33,7 @@ import 'dialogs/about_dialog.dart';
 import 'dialogs/password_dialog.dart';
 import 'widgets/right_dock.dart';
 import 'widgets/toolbox.dart';
+import 'widgets/window_caption_bar.dart';
 
 class WorkspacePage extends StatefulWidget {
   const WorkspacePage({super.key, this.initialFilePath});
@@ -70,7 +71,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
   bool _autoSaveBusy = false;
   final TextEditingController _widthController = TextEditingController();
   final TextEditingController _heightController = TextEditingController();
-  String? _sizeEditObjectId;
 
   @override
   void initState() {
@@ -552,9 +552,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
       ],
     );
     context.read<DocumentBloc>().updateObject(updated);
-    setState(() => _sizeEditObjectId = null);
-    _widthController.clear();
-    _heightController.clear();
   }
 
   Future<void> _addMeasurement(MeasurementType type) async {
@@ -1113,43 +1110,56 @@ class _WorkspacePageState extends State<WorkspacePage> {
             backgroundColor: themeState.cute
                 ? const Color(0xfff1edf3)
                 : const Color(0xffe2e5e9),
-            body: SafeArea(
-              child: Column(
-                children: [
-                  _menuBar(l10n),
-                  _standardBar(l10n, documentState),
-                  _contextBar(l10n, documentState),
-                  Expanded(
-                    child: Row(
+            body: Column(
+              children: [
+                // The desktop build hides the native title bar, so the app has
+                // to draw its own caption. It stays outside SafeArea so the drag
+                // strip reaches the very top edge of the window.
+                if (usesCustomWindowChrome)
+                  WindowCaptionBar(title: l10n.appTitle, cute: themeState.cute),
+                Expanded(
+                  child: SafeArea(
+                    top: !usesCustomWindowChrome,
+                    child: Column(
                       children: [
-                        BlocBuilder<ToolBloc, ToolState>(
-                          builder: (context, toolState) => ToolBox(
-                            active: toolState.active,
-                            cute: themeState.cute,
-                            onSelected: (tool) =>
-                                context.read<ToolBloc>().select(tool),
+                        _menuBar(l10n),
+                        _standardBar(l10n, documentState),
+                        _contextBar(l10n, documentState),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              BlocBuilder<ToolBloc, ToolState>(
+                                builder: (context, toolState) => ToolBox(
+                                  active: toolState.active,
+                                  cute: themeState.cute,
+                                  onSelected: (tool) =>
+                                      context.read<ToolBloc>().select(tool),
+                                ),
+                              ),
+                              Expanded(child: SketchpadCanvas(key: _canvasKey)),
+                              RightDock(
+                                cute: themeState.cute,
+                                collapsed:
+                                    _dockCollapsed ||
+                                    MediaQuery.sizeOf(context).width < 640,
+                                onToggle: () => setState(
+                                  () => _dockCollapsed = !_dockCollapsed,
+                                ),
+                                onAddMeasurement: _addMeasurement,
+                                onAddAnimation: _addAnimation,
+                                onApplyAi: _applyAi,
+                                onRunCommand: _runDocumentCommand,
+                              ),
+                            ],
                           ),
                         ),
-                        Expanded(child: SketchpadCanvas(key: _canvasKey)),
-                        RightDock(
-                          cute: themeState.cute,
-                          collapsed:
-                              _dockCollapsed ||
-                              MediaQuery.sizeOf(context).width < 640,
-                          onToggle: () =>
-                              setState(() => _dockCollapsed = !_dockCollapsed),
-                          onAddMeasurement: _addMeasurement,
-                          onAddAnimation: _addAnimation,
-                          onApplyAi: _applyAi,
-                          onRunCommand: _runDocumentCommand,
-                        ),
+                        _documentTabs(l10n, documentState),
+                        _statusBar(l10n, active),
                       ],
                     ),
                   ),
-                  _documentTabs(l10n, documentState),
-                  _statusBar(l10n, active),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1326,9 +1336,18 @@ class _WorkspacePageState extends State<WorkspacePage> {
     );
   }
 
+  /// Width below which the standard toolbar switches to its stacked, icon-only
+  /// layout.
+  ///
+  /// English labels are substantially wider than their Chinese counterparts, so
+  /// English needs a higher threshold. Without this the English bar squeezes its
+  /// labels out of view at widths that still fit Chinese comfortably.
+  double _toolbarCompactWidth(BuildContext context) =>
+      Localizations.localeOf(context).languageCode == 'en' ? 1780 : 1500;
+
   Widget _standardBar(AppLocalizations l10n, DocumentState documentState) {
     final width = MediaQuery.sizeOf(context).width;
-    final compact = width < 1500;
+    final compact = width < _toolbarCompactWidth(context);
     final toolColumns = ((width - 20) / 56).floor().clamp(
       1,
       MoeTool.values.length,
@@ -1351,7 +1370,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final compact = constraints.maxWidth < 1500;
+                final compact =
+                    constraints.maxWidth < _toolbarCompactWidth(context);
                 return SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -1579,7 +1599,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 ];
                 return LayoutBuilder(
                   builder: (context, constraints) {
-                    final compact = constraints.maxWidth < 1500;
+                    final compact =
+                        constraints.maxWidth < _toolbarCompactWidth(context);
                     final children = [
                       for (final (tool, label, icon) in tools)
                         Padding(
@@ -1763,79 +1784,93 @@ class _WorkspacePageState extends State<WorkspacePage> {
           bottom: BorderSide(color: Color(0xff8798a9), width: 1.2),
         ),
       ),
-      child: Row(
-        children: [
-          if (object == null) ...[
-            const Icon(Icons.tune, size: 17, color: Color(0xff315775)),
-            const SizedBox(width: 6),
-            Text(
-              '${l10n.contextCanvas} · ${l10n.geometrySettings}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xff203548),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const Spacer(),
-            BlocBuilder<CanvasBloc, CanvasState>(
-              builder: (context, canvas) => Text(
-                l10n.statusOrigin(
-                  _number(canvas.origin.x),
-                  _number(canvas.origin.y),
+      // The selection controls (W/H, measurement, delete) do not fit at every
+      // window width, so that row scrolls horizontally. It cannot use a Spacer,
+      // because a horizontally unbounded Row forbids flexible children.
+      child: object == null
+          ? Row(
+              children: [
+                const Icon(Icons.tune, size: 17, color: Color(0xff315775)),
+                const SizedBox(width: 6),
+                Text(
+                  '${l10n.contextCanvas} · ${l10n.geometrySettings}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xff203548),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xff455b70),
-                  fontWeight: FontWeight.w600,
+                const Spacer(),
+                BlocBuilder<CanvasBloc, CanvasState>(
+                  builder: (context, canvas) => Text(
+                    l10n.statusOrigin(
+                      _number(canvas.origin.x),
+                      _number(canvas.origin.y),
+                    ),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xff455b70),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
+              ],
+            )
+          : SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.select_all,
+                    size: 15,
+                    color: const Color(0xff55728b),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${object.kind.name} · ${object.id}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (object.label?.isNotEmpty == true) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      object.label!,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xff9a4f6d),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                  if (object.bounds != null) ...[
+                    const SizedBox(width: 12),
+                    _SizeEditor(
+                      object: object,
+                      widthController: _widthController,
+                      heightController: _heightController,
+                      onApply: (width, height) =>
+                          _resizeSelected(object, width, height),
+                    ),
+                  ],
+                  const SizedBox(width: 12),
+                  TextButton.icon(
+                    onPressed: () => _addMeasurement(MeasurementType.length),
+                    icon: const Icon(Icons.straighten, size: 14),
+                    label: Text(
+                      l10n.addMeasure,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: l10n.deleteSelection,
+                    onPressed: _deleteSelection,
+                    icon: const Icon(Icons.delete_outline, size: 17),
+                  ),
+                ],
               ),
             ),
-          ] else ...[
-            Icon(Icons.select_all, size: 15, color: const Color(0xff55728b)),
-            const SizedBox(width: 6),
-            Text(
-              '${object.kind.name} · ${object.id}',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-            ),
-            if (object.label?.isNotEmpty == true) ...[
-              const SizedBox(width: 8),
-              Text(
-                object.label!,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xff9a4f6d),
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ],
-            if (object.bounds != null) ...[
-              const SizedBox(width: 10),
-              _SizeEditor(
-                object: object,
-                widthController: _widthController,
-                heightController: _heightController,
-                editObjectId: _sizeEditObjectId,
-                onStartEdit: (id) => setState(() => _sizeEditObjectId = id),
-                onApply: (width, height) => _resizeSelected(object, width, height),
-              ),
-            ],
-            const Spacer(),
-            TextButton.icon(
-              onPressed: () => _addMeasurement(MeasurementType.length),
-              icon: const Icon(Icons.straighten, size: 14),
-              label: Text(
-                l10n.addMeasure,
-                style: const TextStyle(fontSize: 11),
-              ),
-            ),
-            IconButton(
-              tooltip: l10n.deleteSelection,
-              onPressed: _deleteSelection,
-              icon: const Icon(Icons.delete_outline, size: 17),
-            ),
-          ],
-        ],
-      ),
     );
   }
 
@@ -2137,16 +2172,12 @@ class _SizeEditor extends StatefulWidget {
     required this.object,
     required this.widthController,
     required this.heightController,
-    required this.editObjectId,
-    required this.onStartEdit,
     required this.onApply,
   });
 
   final GeometryObject object;
   final TextEditingController widthController;
   final TextEditingController heightController;
-  final String? editObjectId;
-  final void Function(String id) onStartEdit;
   final void Function(double width, double height) onApply;
 
   @override
@@ -2155,16 +2186,39 @@ class _SizeEditor extends StatefulWidget {
 
 class _SizeEditorState extends State<_SizeEditor> {
   @override
+  void initState() {
+    super.initState();
+    _syncFromObject();
+  }
+
+  @override
   void didUpdateWidget(_SizeEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Refresh displayed values whenever a different object becomes selected.
-    if (widget.editObjectId != oldWidget.editObjectId ||
-        widget.object.id != oldWidget.object.id) {
-      final bounds = widget.object.bounds;
-      if (bounds != null && widget.editObjectId == widget.object.id) {
-        widget.widthController.text = bounds.width.toStringAsFixed(2);
-        widget.heightController.text = bounds.height.toStringAsFixed(2);
-      }
+    // Refresh the displayed values whenever the selection changes to another
+    // object, or the same object is resized from the canvas.
+    final oldBounds = oldWidget.object.bounds;
+    final newBounds = widget.object.bounds;
+    if (widget.object.id != oldWidget.object.id ||
+        oldBounds?.width != newBounds?.width ||
+        oldBounds?.height != newBounds?.height) {
+      _syncFromObject();
+    }
+  }
+
+  /// Mirrors the selected object's bounds into the text fields.
+  ///
+  /// Skipped while the user is typing in them, so an inbound document update
+  /// cannot overwrite an in-progress edit.
+  void _syncFromObject() {
+    final bounds = widget.object.bounds;
+    if (bounds == null) return;
+    final width = bounds.width.toStringAsFixed(2);
+    final height = bounds.height.toStringAsFixed(2);
+    if (widget.widthController.text != width) {
+      widget.widthController.text = width;
+    }
+    if (widget.heightController.text != height) {
+      widget.heightController.text = height;
     }
   }
 
@@ -2178,33 +2232,21 @@ class _SizeEditorState extends State<_SizeEditor> {
   @override
   Widget build(BuildContext context) {
     final bounds = widget.object.bounds;
-    final editing = widget.editObjectId == widget.object.id;
     if (bounds == null) return const SizedBox.shrink();
-    if (!editing) {
-      return Tooltip(
-        message: 'Click to edit width/height',
-        child: InkWell(
-          onTap: () => widget.onStartEdit(widget.object.id),
-          child: const SizedBox(
-            width: 20,
-            height: 20,
-            child: Icon(Icons.edit, size: 16, color: Color(0xff526576)),
-          ),
-        ),
-      );
-    }
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('W', style: TextStyle(fontSize: 10, color: Color(0xff526576))),
+        const Text(
+          'W',
+          style: TextStyle(fontSize: 10, color: Color(0xff526576)),
+        ),
         const SizedBox(width: 4),
         SizedBox(
-          width: 52,
+          width: 56,
           child: TextField(
             controller: widget.widthController,
-            autofocus: true,
             textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+            style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace'),
             decoration: const InputDecoration(
               isDense: true,
               contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -2213,15 +2255,18 @@ class _SizeEditorState extends State<_SizeEditor> {
             onSubmitted: (_) => _apply(),
           ),
         ),
-        const SizedBox(width: 4),
-        const Text('H', style: TextStyle(fontSize: 10, color: Color(0xff526576))),
+        const SizedBox(width: 6),
+        const Text(
+          'H',
+          style: TextStyle(fontSize: 10, color: Color(0xff526576)),
+        ),
         const SizedBox(width: 4),
         SizedBox(
-          width: 52,
+          width: 56,
           child: TextField(
             controller: widget.heightController,
             textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+            style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace'),
             decoration: const InputDecoration(
               isDense: true,
               contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),

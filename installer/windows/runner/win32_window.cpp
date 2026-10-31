@@ -2,6 +2,7 @@
 
 #include <dwmapi.h>
 #include <flutter_windows.h>
+#include <windowsx.h>
 
 #include "resource.h"
 
@@ -122,7 +123,8 @@ Win32Window::~Win32Window() {
 
 bool Win32Window::Create(const std::wstring& title,
                          const Point& origin,
-                         const Size& size) {
+                         const Size& size,
+                         bool frameless) {
   Destroy();
 
   const wchar_t* window_class =
@@ -134,15 +136,28 @@ bool Win32Window::Create(const std::wstring& title,
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
+  // A frameless window drops the caption and thick frame so the Flutter UI can
+  // draw its own chrome. WS_THICKFRAME is retained because the desktop window
+  // manager uses it for the drop shadow and for snap layouts once the custom
+  // hit testing below reports the resize borders.
+  const DWORD style = frameless
+                          ? (WS_POPUP | WS_THICKFRAME | WS_MINIMIZEBOX |
+                             WS_MAXIMIZEBOX | WS_SYSMENU)
+                          : WS_OVERLAPPEDWINDOW;
+
   HWND window = CreateWindow(
-      window_class, title.c_str(),
-      WS_POPUP | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX | WS_SYSMENU,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
-      Scale(size.width, scale_factor), Scale(size.height, scale_factor),
-      nullptr, nullptr, GetModuleHandle(nullptr), this);
+      window_class, title.c_str(), style, Scale(origin.x, scale_factor),
+      Scale(origin.y, scale_factor), Scale(size.width, scale_factor),
+      Scale(size.height, scale_factor), nullptr, nullptr,
+      GetModuleHandle(nullptr), this);
 
   if (!window) {
     return false;
+  }
+
+  frameless_ = frameless;
+  if (frameless_) {
+    ApplyFramelessChrome();
   }
 
   UpdateTheme(window);
@@ -193,18 +208,85 @@ Win32Window::MessageHandler(HWND hwnd,
       return 1;
 
     case WM_NCHITTEST: {
-      // Allow dragging the borderless window from anywhere in the client area.
+      if (!frameless_) {
+        return DefWindowProc(window_handle_, message, wparam, lparam);
+      }
+      // Custom hit testing gives the chromeless window real resize borders and
+      // a draggable caption strip without a native title bar. Only the reserved
+      // strip at the top drags, so Flutter widgets below it keep receiving
+      // clicks normally.
       POINT cursor_point;
       cursor_point.x = GET_X_LPARAM(lparam);
       cursor_point.y = GET_Y_LPARAM(lparam);
-      ScreenToClient(hwnd, &cursor_point);
+
       RECT rect;
-      GetClientRect(hwnd, &rect);
-      if (cursor_point.x >= rect.left && cursor_point.x < rect.right &&
-          cursor_point.y >= rect.top && cursor_point.y < rect.bottom) {
-        return HTCAPTION;
+      GetWindowRect(hwnd, &rect);
+      const int border = Scale(kResizeBorder, 1.0);
+
+      const bool on_left = cursor_point.x < rect.left + border;
+      const bool on_right = cursor_point.x >= rect.right - border;
+      const bool on_top = cursor_point.y < rect.top + border;
+      const bool on_bottom = cursor_point.y >= rect.bottom - border;
+
+      if (on_top && on_left) return HTTOPLEFT;
+      if (on_top && on_right) return HTTOPRIGHT;
+      if (on_bottom && on_left) return HTBOTTOMLEFT;
+      if (on_bottom && on_right) return HTBOTTOMRIGHT;
+      if (on_left) return HTLEFT;
+      if (on_right) return HTRIGHT;
+      if (on_top) return HTTOP;
+      if (on_bottom) return HTBOTTOM;
+
+      // Maximized windows must not be draggable by the caption, otherwise the
+      // user can tear the window off its maximized state accidentally.
+      if (!IsWindowMaximized()) {
+        POINT client_point = cursor_point;
+        ScreenToClient(hwnd, &client_point);
+        const int caption_height = Scale(kCaptionHeight, 1.0);
+        if (client_point.y >= 0 && client_point.y < caption_height &&
+            client_point.x >= 0) {
+          return HTCAPTION;
+        }
       }
-      return DefWindowProc(window_handle_, message, wparam, lparam);
+      return HTCLIENT;
+    }
+
+    case WM_GETMINMAXINFO: {
+      if (frameless_) {
+        auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
+        HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        // FlutterDesktopGetDpiForMonitor is already used for window creation and
+        // does not depend on a Windows 10-only SDK macro, unlike GetDpiForWindow.
+        const UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
+        const double scale = (dpi == 0 ? 96 : dpi) / 96.0;
+        info->ptMinTrackSize.x = Scale(kMinimumWidth, scale);
+        info->ptMinTrackSize.y = Scale(kMinimumHeight, scale);
+
+        // A WS_POPUP window is maximized to the whole monitor by default, which
+        // would bury the taskbar. Constrain the maximized rect to the monitor's
+        // work area so the installer behaves like an ordinary app window.
+        MONITORINFO monitor_info{};
+        monitor_info.cbSize = sizeof(monitor_info);
+        if (GetMonitorInfo(monitor, &monitor_info)) {
+          const RECT& work = monitor_info.rcWork;
+          const RECT& full = monitor_info.rcMonitor;
+          info->ptMaxPosition.x = work.left - full.left;
+          info->ptMaxPosition.y = work.top - full.top;
+          info->ptMaxSize.x = work.right - work.left;
+          info->ptMaxSize.y = work.bottom - work.top;
+        }
+        return 0;
+      }
+      break;
+    }
+
+    case WM_NCCALCSIZE: {
+      // Removing the non-client area entirely is what makes the window truly
+      // chromeless while keeping the native resize/snap behaviour.
+      if (frameless_ && wparam == TRUE) {
+        return 0;
+      }
+      break;
     }
 
     case WM_DPICHANGED: {
@@ -281,6 +363,63 @@ HWND Win32Window::GetHandle() {
 
 void Win32Window::SetQuitOnClose(bool quit_on_close) {
   quit_on_close_ = quit_on_close;
+}
+
+void Win32Window::ApplyFramelessChrome() {
+  if (!window_handle_) {
+    return;
+  }
+  // Extend the DWM frame into the client area so a chromeless window still gets
+  // a native drop shadow and rounded corners on Windows 11, and so system snap
+  // layouts keep working.
+  const MARGINS margins = {1, 1, 1, 1};
+  DwmExtendFrameIntoClientArea(window_handle_, &margins);
+
+#ifndef DWMWA_WINDOW_CORNER_PREFERENCE
+#define DWMWA_WINDOW_CORNER_PREFERENCE 33
+#endif
+#ifndef DWMWCP_ROUND
+#define DWMWCP_ROUND 2
+#endif
+  const DWORD corner_preference = DWMWCP_ROUND;
+  DwmSetWindowAttribute(window_handle_, DWMWA_WINDOW_CORNER_PREFERENCE,
+                        &corner_preference, sizeof(corner_preference));
+
+  // Re-evaluate the frame now that the styles and margins changed.
+  SetWindowPos(window_handle_, nullptr, 0, 0, 0, 0,
+               SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                   SWP_NOACTIVATE);
+}
+
+void Win32Window::Minimize() {
+  if (window_handle_) {
+    ShowWindow(window_handle_, SW_MINIMIZE);
+  }
+}
+
+void Win32Window::ToggleMaximize() {
+  if (!window_handle_) {
+    return;
+  }
+  ShowWindow(window_handle_, IsWindowMaximized() ? SW_RESTORE : SW_MAXIMIZE);
+}
+
+bool Win32Window::IsWindowMaximized() const {
+  if (!window_handle_) {
+    return false;
+  }
+  WINDOWPLACEMENT placement{};
+  placement.length = sizeof(placement);
+  if (!GetWindowPlacement(window_handle_, &placement)) {
+    return false;
+  }
+  return placement.showCmd == SW_SHOWMAXIMIZED;
+}
+
+void Win32Window::CloseWindow() {
+  if (window_handle_) {
+    PostMessage(window_handle_, WM_CLOSE, 0, 0);
+  }
 }
 
 bool Win32Window::OnCreate() {

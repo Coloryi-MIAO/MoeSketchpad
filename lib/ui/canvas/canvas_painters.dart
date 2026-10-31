@@ -663,7 +663,8 @@ class CanvasOverlayPainter extends CustomPainter {
             ),
             const Radius.circular(2),
           ),
-          handlePaint..color = _accent.withValues(alpha: isRotateActive ? 1 : 0.85),
+          handlePaint
+            ..color = _accent.withValues(alpha: isRotateActive ? 1 : 0.85),
         );
       }
     }

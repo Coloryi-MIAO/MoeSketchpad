@@ -34,7 +34,13 @@ class Win32Window {
   // consistent size this function will scale the inputted width and height as
   // as appropriate for the default monitor. The window is invisible until
   // |Show| is called. Returns true if the window was created successfully.
-  bool Create(const std::wstring& title, const Point& origin, const Size& size);
+  //
+  // When |frameless| is true the window is created without the standard title
+  // bar and non-client frame, leaving a chromeless surface that the Flutter UI
+  // draws itself. The window stays resizable and draggable through the desktop
+  // window manager shim implemented in this class.
+  bool Create(const std::wstring& title, const Point& origin, const Size& size,
+              bool frameless = false);
 
   // Show the current window. Returns true if the window was successfully shown.
   bool Show();
@@ -54,6 +60,24 @@ class Win32Window {
 
   // Return a RECT representing the bounds of the current client area.
   RECT GetClientArea();
+
+  // Height of the draggable caption strip at the top of a frameless window.
+  static constexpr int kCaptionHeight = 36;
+
+  // Thickness of the resize border around a frameless window.
+  static constexpr int kResizeBorder = 6;
+
+  // Smallest size a frameless window may be resized to.
+  static constexpr int kMinimumWidth = 480;
+  static constexpr int kMinimumHeight = 560;
+
+  // Window commands accepted from the Flutter chrome.
+  void Minimize();
+  void ToggleMaximize();
+  // Named IsWindowMaximized rather than IsMaximized because <windowsx.h>
+  // defines IsMaximized as a function-like macro.
+  bool IsWindowMaximized() const;
+  void CloseWindow();
 
  protected:
   // Processes and route salient window messages for mouse handling,
@@ -90,7 +114,13 @@ class Win32Window {
   // Update the window frame's theme to match the system theme.
   static void UpdateTheme(HWND const window);
 
+  // Applies the frameless window region and drop shadow.
+  void ApplyFramelessChrome();
+
   bool quit_on_close_ = false;
+
+  // True when the window was created without a standard title bar.
+  bool frameless_ = false;
 
   // window handle for top level window.
   HWND window_handle_ = nullptr;

@@ -6,6 +6,7 @@ import 'package:moesketchpad/app.dart';
 import 'package:moesketchpad/bloc/canvas_bloc.dart';
 import 'package:moesketchpad/bloc/document_bloc.dart';
 import 'package:moesketchpad/bloc/tool_bloc.dart';
+import 'package:moesketchpad/ui/widgets/window_caption_bar.dart';
 
 void main() {
   testWidgets('workspace shows the CDR shell and creates a point', (
@@ -56,7 +57,12 @@ void main() {
     expect(find.byKey(const ValueKey('ai-endpoint')), findsOneWidget);
     expect(find.byKey(const ValueKey('ai-model')), findsOneWidget);
     expect(find.byKey(const ValueKey('ai-api-key')), findsOneWidget);
-    expect(tester.getRect(find.text('文件(F)').first).top, lessThan(40));
+    // The menu bar sits just below the top edge, offset only by the custom
+    // caption strip on platforms that draw one (Windows/macOS).
+    expect(
+      tester.getRect(find.text('文件(F)').first).top,
+      lessThan((usesCustomWindowChrome ? windowCaptionHeight : 0) + 40),
+    );
     expect(tester.getRect(find.text('点').first).left, lessThan(400));
     expect(tester.getRect(find.text('几何设定')).right, greaterThan(1440 - 310));
     final canvasBloc = tester
@@ -211,7 +217,10 @@ void main() {
       tester.getRect(find.text('文件(F)').first).top,
       greaterThanOrEqualTo(0),
     );
-    expect(tester.getRect(find.text('文件(F)').first).bottom, lessThan(40));
+    expect(
+      tester.getRect(find.text('文件(F)').first).bottom,
+      lessThan((usesCustomWindowChrome ? windowCaptionHeight : 0) + 40),
+    );
     expect(tester.takeException(), isNull);
 
     await tester.binding.setSurfaceSize(const Size(1140, 760));

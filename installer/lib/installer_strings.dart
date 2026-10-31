@@ -1,0 +1,125 @@
+// SPDX-License-Identifier: GPL-3.0-only
+/// Localized copy for the Windows installer.
+///
+/// The installer ships exactly two languages and has no code-generation step, so
+/// every user-visible string lives in this one table instead of generated ARB
+/// output. Adding a language means adding a branch here and listing its code in
+/// [InstallerStrings.supported].
+library;
+
+class InstallerStrings {
+  const InstallerStrings(this.languageCode);
+
+  /// Language codes the installer understands, in menu order.
+  static const List<String> supported = ['zh', 'en'];
+
+  final String languageCode;
+
+  /// True when the active language is Chinese.
+  bool get isChinese => languageCode == 'zh';
+
+  /// Label for this language inside its own picker.
+  String get languageName => isChinese ? '简体中文' : 'English';
+
+  // ---------------------------------------------------------------- branding
+
+  String get windowTitle => isChinese ? '萌板安装程序' : 'MoeSketchpad Setup';
+  String get brandName => isChinese ? '萌板' : 'MoeSketchpad';
+  String get brandLatin => 'MOESKETCHPAD';
+  String get brandTagline => isChinese
+      ? '为灵感与几何留出的安静空间。'
+      : 'A calm, precise space for ideas and geometry.';
+
+  // ----------------------------------------------------------------- welcome
+
+  String get welcomeHeading => isChinese ? '安装萌板' : 'Install MoeSketchpad';
+  String get welcomeSubtitle => isChinese
+      ? '为当前 Windows 账户安装几何画板与 moesp 命令行工具。'
+      : 'Install the geometry workspace and its command-line tools for your '
+            'Windows account.';
+
+  String get folderLabel => isChinese ? '安装位置' : 'Installation folder';
+  String get folderHint => isChinese ? '选择一个文件夹' : 'Choose a folder';
+  String get folderInvalid => isChinese
+      ? '请选择以 MoeSketchpad 结尾的文件夹。'
+      : 'Choose a folder whose final name is MoeSketchpad.';
+
+  String get languageLabel => isChinese ? '界面语言' : 'Interface language';
+
+  String get moespLabel =>
+      isChinese ? 'moesp 命令注册方式' : 'moesp command registration';
+  String get moespAuto =>
+      isChinese ? '自动加入 PATH（推荐）' : 'Add to PATH automatically (recommended)';
+  String get moespSkip => isChinese ? '暂不注册 PATH' : 'Do not register PATH';
+
+  String get optionDesktop =>
+      isChinese ? '创建桌面快捷方式' : 'Create a desktop shortcut';
+  String get optionStartMenu => isChinese ? '添加到开始菜单' : 'Add to Start menu';
+  String get optionLaunch =>
+      isChinese ? '安装完成后启动萌板' : 'Launch MoeSketchpad when finished';
+
+  String get install => isChinese ? '开始安装' : 'Install';
+  String get cancel => isChinese ? '取消' : 'Cancel';
+  String get finish => isChinese ? '完成' : 'Finish';
+  String get retry => isChinese ? '重试' : 'Try again';
+
+  // --------------------------------------------------------------- progress
+
+  String get installingHeading =>
+      isChinese ? '正在安装' : 'Setting up your workspace';
+  String get statusPreparing =>
+      isChinese ? '正在准备安装…' : 'Preparing installation…';
+  String get statusWaiting =>
+      isChinese ? '正在等待萌板关闭…' : 'Waiting for MoeSketchpad to close…';
+  String get statusVerifying =>
+      isChinese ? '正在校验安装包…' : 'Verifying installation package…';
+  String statusInstalling(int done, int total) =>
+      isChinese ? '正在写入文件（$done/$total）…' : 'Installing files ($done/$total)…';
+  String get statusIntegration =>
+      isChinese ? '正在创建快捷方式与文件关联…' : 'Creating shortcuts and file association…';
+  String get statusComplete => isChinese ? '安装完成' : 'Installation complete';
+  String get statusFailed => isChinese ? '安装失败' : 'Installation failed';
+  String get statusReady => isChinese ? '准备就绪' : 'Ready to install';
+
+  /// Percentage label beside the progress ring.
+  String percent(int value) => '$value%';
+
+  // -------------------------------------------------------------- completion
+
+  String get completeHeading => isChinese ? '安装完成，可以开始使用' : 'You are all set';
+  String get completeBody => isChinese
+      ? '萌板与 moesp 命令已就绪。双击任意 .moesp 文档即可打开。'
+      : 'MoeSketchpad and the moesp command are ready. Double-click a .moesp '
+            'document to open it.';
+
+  String get failedHeading => isChinese ? '安装未能完成' : 'Could not finish setup';
+
+  // ------------------------------------------------------------ error detail
+
+  String get errorRunning => isChinese
+      ? '无法确认萌板是否正在运行。'
+      : 'Could not check whether MoeSketchpad is running.';
+  String get errorCloseFirst => isChinese
+      ? '请先关闭萌板，再安装或升级。'
+      : 'Close MoeSketchpad before installing or updating.';
+  String get errorWaitClose => isChinese
+      ? '无法等待正在运行的萌板关闭。'
+      : 'Could not wait for the running application to close.';
+  String get errorTimeout => isChinese
+      ? '萌板在三分钟内没有关闭。'
+      : 'MoeSketchpad did not close within three minutes.';
+  String get errorPathRead =>
+      isChinese ? '无法读取当前用户的 PATH。' : 'Could not read the current user PATH.';
+  String get errorShortcutFolders => isChinese
+      ? '无法定位当前用户的快捷方式目录。'
+      : 'Could not locate the current user shortcut folders.';
+  String errorCommandFailed(int exitCode) => isChinese
+      ? '命令执行失败（退出码 $exitCode）。'
+      : 'A command failed with exit code $exitCode.';
+
+  // ------------------------------------------------------------------ footer
+
+  String get licenseLabel => 'GPL-3.0-only';
+  String get authorLabel => 'Coloryi-MIAO';
+  String get versionLabel => isChinese ? '版本' : 'Version';
+}

@@ -106,3 +106,9 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# The .moesp file association registered by the installer points DefaultIcon at
+# "<install dir>\if.ico", so ship the icon beside the executable rather than only
+# inside flutter_assets, where Windows shell lookups cannot find it.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../assets/if.ico"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)

@@ -196,10 +196,12 @@ class CanvasBloc extends Cubit<CanvasState> {
 
   void deleteSelectedGuide() {
     if (state.selectedGuide == null) return;
-    emit(state.copyWith(
-      guides: [...state.guides]..remove(state.selectedGuide),
-      selectedGuide: null,
-    ));
+    emit(
+      state.copyWith(
+        guides: [...state.guides]..remove(state.selectedGuide),
+        selectedGuide: null,
+      ),
+    );
   }
 
   void fitBounds(Bounds2? bounds) {

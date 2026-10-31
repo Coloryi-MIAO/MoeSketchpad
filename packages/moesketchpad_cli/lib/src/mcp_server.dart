@@ -79,7 +79,14 @@ class McpServer {
             'capabilities': {
               'tools': {'listChanged': false},
             },
-            'serverInfo': {'name': 'moesketchpad-msp', 'version': '0.1.0'},
+            'serverInfo': {
+              'name': 'moesketchpad-msp',
+              'title': 'MoeSketchpad MCP Server',
+              'version': '0.1.0',
+              'author': 'Coloryi-MIAO',
+              'license': 'GPL-3.0-only',
+              'repository': 'https://github.com/Coloryi-MIAO/MoeSketchpad',
+            },
             'instructions': moeSketchpadSystemPrompt(language: globals.lang),
           },
         });

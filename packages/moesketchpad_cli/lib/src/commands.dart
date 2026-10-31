@@ -1086,11 +1086,10 @@ class ExportCommand extends Command<int> {
   String get name => 'export';
 
   @override
-  String get description =>
-      globals.t(
-        '导出 SVG、PNG、JSON、GIF 或 APNG',
-        'Export SVG, PNG, JSON, GIF, or APNG',
-      );
+  String get description => globals.t(
+    '导出 SVG、PNG、JSON、GIF 或 APNG',
+    'Export SVG, PNG, JSON, GIF, or APNG',
+  );
 
   @override
   Future<int> run() async {

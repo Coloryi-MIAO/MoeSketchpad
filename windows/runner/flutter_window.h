@@ -23,6 +23,10 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
+  /// Pins the maximized window to the monitor work area so it does not cover
+  /// the taskbar.
+  LRESULT HandleGetMinMaxInfo(HWND hwnd, WPARAM wparam, LPARAM lparam) const;
+
   // The project to run.
   flutter::DartProject project_;
 
