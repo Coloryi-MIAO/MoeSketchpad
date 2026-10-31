@@ -94,10 +94,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
-  // Claim the single-instance lock. When this launch was for the installer (no
-  // --uninstall flag), a second instance simply raises the existing one and
-  // exits. An explicit uninstall must always run on its own so the ARP entry
-  // can be removed even while an installer window is open.
+  // The installer is intentionally multi-instance: a second launch (e.g. after
+  // a first install completed) must always spawn a fresh, independent window
+  // rather than raising an old one and exiting. Only the moesketchpad core app
+  // enforces single-instance behavior. An explicit --uninstall must also always
+  // run on its own so the ARP entry can be removed even while an installer
+  // window is open.
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
   const bool is_uninstall = std::find_if(
@@ -105,19 +107,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       [](const std::string& a) { return a == "--uninstall"; }) !=
       command_line_arguments.end();
 
+  // No single-instance mutex for the installer itself; launches are always
+  // independent (a second installer window must be allowed after a first
+  // install completes, and an --uninstall from ARP must always run).
   HANDLE instance_mutex = nullptr;
-  if (!is_uninstall) {
-    instance_mutex = ::CreateMutexW(nullptr, TRUE, kInstallerMutex);
-    const bool already_running =
-        instance_mutex != nullptr && ::GetLastError() == ERROR_ALREADY_EXISTS;
-    if (already_running) {
-      RequestActivation();
-      if (instance_mutex != nullptr) {
-        ::CloseHandle(instance_mutex);
-      }
-      return EXIT_SUCCESS;
-    }
-  }
 
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.

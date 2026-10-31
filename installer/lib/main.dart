@@ -552,33 +552,45 @@ class _InstallerPageState extends State<InstallerPage> {
   }
 
   /// Opens the native Windows folder-browser dialog via the COM
-  /// `Shell.Application` object and writes the chosen directory to [callback].
-  /// The dialog always lets the caller pick a *parent* folder; the installer
-  /// appends a `MoeSketchpad` suffix so the final install folder is always
-  /// named correctly regardless of what the user selected.
+  /// `Shell.Application` object. A temp file is used as a handoff channel
+  /// because [Process.run] blocks and cannot host the modal dialog, so the
+  /// PowerShell process is started interactively and we await its exit before
+  /// reading the chosen path. The installer appends a `MoeSketchpad` suffix so
+  /// the final folder is always named correctly regardless of the parent.
   Future<void> _browseForFolder(
     BuildContext context,
     void Function(String path) callback,
   ) async {
+    final outFile =
+        p.join(Platform.environment['TEMP'] ?? '.', 'moesp_folderpick.txt');
+    // Remove a stale result from a previous run.
+    try {
+      await File(outFile).delete();
+    } catch (_) {}
     final script =
-        "\$shell = New-Object -ComObject Shell.Application; "
-        '\$folder = \$shell.BrowseForFolder(0, "选择安装到的文件夹 / Choose a folder"); '
-        'if (\$folder) { Write-Output \$folder.Self.Path }';
+        "\$out = '\$env:TEMP\\moesp_folderpick.txt';"
+        ' if (Test-Path \$out) { Remove-Item \$out };'
+        ' \$shell = New-Object -ComObject Shell.Application;'
+        ' \$folder = \$shell.BrowseForFolder(0, "选择安装到的文件夹 / Choose a folder");'
+        ' if (\$folder) { [System.IO.File]::WriteAllText(\$out, \$folder.Self.Path) }';
     final encoded = _encodePowerShell(script);
-    final result = await Process.run('powershell.exe', [
+    final proc = await Process.start('powershell.exe', [
       '-NoProfile',
-      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
       '-EncodedCommand',
       encoded,
-    ]);
-    final output = (result.stdout as String?)?.trim();
-    if (result.exitCode == 0 && output != null && output.isNotEmpty) {
-      final chosen = p.join(output, 'MoeSketchpad');
+    ], mode: ProcessStartMode.detached);
+    // Await the shell exiting (user closed the dialog).
+    final exitCode = await proc.exitCode;
+    final txt = await File(outFile).readAsString().then((s) => s.trim());
+    if (exitCode == 0 && txt.isNotEmpty) {
+      final chosen = p.join(txt, 'MoeSketchpad');
       callback(p.normalize(chosen));
     } else if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_strings.folderPickError)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_strings.folderPickError)),
+      );
     }
   }
 
