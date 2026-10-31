@@ -88,7 +88,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           flutter test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          flutter build windows --release --build-name=1.0.0 --build-number=${{ github.run_number }}
+          flutter build windows --release --build-name=1.0.0 --build-number=${{ github.run_number }} --dart-define=MSP_BUILD_NUMBER=${{ github.run_number }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Pop-Location
           Compress-Archive -Path installer\build\windows\x64\runner\Release\* -DestinationPath packaging\windows\output\moesketchpad-setup-windows-x64.zip -CompressionLevel Optimal

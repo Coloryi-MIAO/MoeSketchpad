@@ -8,14 +8,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:moesketchpad_installer/install_manifest.dart';
+import 'package:moesketchpad_installer/uninstall_page.dart';
 import 'package:moesketchpad_installer/installer_strings.dart';
 import 'package:moesketchpad_installer/package_archive.dart';
 import 'package:moesketchpad_installer/window_chrome.dart';
 
-const _payloadAsset = 'assets/moesketchpad-windows.zip';
-
 /// Installer version reported in the custom caption bar.
 const kInstallerVersion = '1.0.0';
+
+/// Build number supplied at compile time by CI (defaults to 0 locally).
+const kBuildNumber = int.fromEnvironment('MSP_BUILD_NUMBER', defaultValue: 0);
+
+const _payloadAsset = 'assets/moesketchpad-windows.zip';
 
 const _accent = Color(0xff386f9f);
 
@@ -61,7 +66,30 @@ Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   final waitPid = _readWaitPid(args);
   final installDir = _readInstallDir(args);
+  final uninstall = args.contains('--uninstall');
+  if (uninstall) {
+    runApp(UninstallerApp(installDir: installDir));
+    return;
+  }
   runApp(InstallerApp(waitPid: waitPid, installDir: installDir));
+}
+
+/// Reads the install directory for an uninstall invoked from Add/Remove
+/// Programs. The ARP entry stores it in [UninstallString]; when absent, fall
+/// back to the manifest-less default install location.
+String _readInstallDir(List<String> args) {
+  final explicit = args
+      .where((arg) => arg.startsWith('--install-dir='))
+      .map((arg) => arg.substring('--install-dir='.length))
+      .where((value) => value.isNotEmpty && !value.contains('"'))
+      .firstOrNull;
+  if (explicit != null) return explicit;
+  final local = Platform.environment['LOCALAPPDATA'];
+  return p.join(
+    local ?? Platform.environment['USERPROFILE'] ?? '.',
+    'Programs',
+    'MoeSketchpad',
+  );
 }
 
 int? _readWaitPid(List<String> args) {
@@ -71,12 +99,6 @@ int? _readWaitPid(List<String> args) {
       .firstOrNull;
   return value != null && value > 0 ? value : null;
 }
-
-String? _readInstallDir(List<String> args) => args
-    .where((arg) => arg.startsWith('--install-dir='))
-    .map((arg) => arg.substring('--install-dir='.length))
-    .where((value) => value.isNotEmpty && !value.contains('"'))
-    .firstOrNull;
 
 class InstallerApp extends StatelessWidget {
   const InstallerApp({super.key, this.waitPid, this.installDir});
@@ -218,10 +240,20 @@ class _InstallerPageState extends State<InstallerPage> {
         }
       }
 
+      // Copy this running installer next to the app so the ARP uninstall entry
+      // (UninstallString -> "<installer.exe>" --uninstall) has something to call.
       setState(() {
-        _progress = 0.93;
+        _progress = 0.91;
         _status = strings.statusIntegration;
       });
+      final self = File(Platform.resolvedExecutable);
+      final target = File(
+        p.join(installDir.path, 'moesketchpad_installer.exe'),
+      );
+      if (await self.exists() && self.path != target.path) {
+        await self.copy(target.path);
+      }
+
       await _registerIntegration(
         installDir.path,
         desktopShortcut: _desktopShortcut,
@@ -411,6 +443,100 @@ class _InstallerPageState extends State<InstallerPage> {
         script,
       ]);
     }
+    _registerUninstallEntry(installDir);
+  }
+
+  /// Registers the install in Add/Remove Programs so the app has a standard
+  /// uninstall entry. The installer doubles as the uninstaller via the
+  /// `--uninstall` flag.
+  void _registerUninstallEntry(String installDir) {
+    const key =
+        r'HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\MoeSketchpad';
+    final exePath = p.join(installDir, 'moesketchpad_installer.exe');
+    final escapedExe = exePath.replaceAll("'", "''");
+    // Write the manifest so the uninstaller knows which options were chosen.
+    InstallManifest.writeTo(
+      installDir,
+      InstallManifest(
+        installDir: installDir,
+        appVersion: kInstallerVersion,
+        buildNumber: kBuildNumber,
+        languageCode: _strings.languageCode,
+        registeredPath: _selectedMoespMode == 'auto',
+        desktopShortcut: _desktopShortcut,
+        startMenuShortcut: _startMenuShortcut,
+      ),
+    );
+    unawaited(
+      _run('reg.exe', [
+        'add',
+        key,
+        '/v',
+        'DisplayName',
+        '/t',
+        'REG_SZ',
+        '/d',
+        'MoeSketchpad',
+        '/f',
+      ]),
+    );
+    unawaited(
+      _run('reg.exe', [
+        'add',
+        key,
+        '/v',
+        'DisplayIcon',
+        '/t',
+        'REG_SZ',
+        '/d',
+        '"$escapedExe",0',
+        '/f',
+      ]),
+    );
+    _run('reg.exe', [
+      'add',
+      key,
+      '/v',
+      'InstallLocation',
+      '/t',
+      'REG_SZ',
+      '/d',
+      installDir,
+      '/f',
+    ]);
+    _run('reg.exe', [
+      'add',
+      key,
+      '/v',
+      'UninstallString',
+      '/t',
+      'REG_SZ',
+      '/d',
+      '"$escapedExe" --uninstall --install-dir="$installDir"',
+      '/f',
+    ]);
+    _run('reg.exe', [
+      'add',
+      key,
+      '/v',
+      'DisplayVersion',
+      '/t',
+      'REG_SZ',
+      '/d',
+      kInstallerVersion,
+      '/f',
+    ]);
+    _run('reg.exe', [
+      'add',
+      key,
+      '/v',
+      'Publisher',
+      '/t',
+      'REG_SZ',
+      '/d',
+      _strings.authorLabel,
+      '/f',
+    ]);
   }
 
   Future<void> _run(String executable, List<String> args) async {
@@ -422,6 +548,37 @@ class _InstallerPageState extends State<InstallerPage> {
         '${result.stderr}'.trim(),
         result.exitCode,
       );
+    }
+  }
+
+  /// Opens the native Windows folder-browser dialog via the COM
+  /// `Shell.Application` object and writes the chosen directory to [callback].
+  /// The dialog always lets the caller pick a *parent* folder; the installer
+  /// appends a `MoeSketchpad` suffix so the final install folder is always
+  /// named correctly regardless of what the user selected.
+  Future<void> _browseForFolder(
+    BuildContext context,
+    void Function(String path) callback,
+  ) async {
+    final script =
+        "\$shell = New-Object -ComObject Shell.Application; "
+        '\$folder = \$shell.BrowseForFolder(0, "选择安装到的文件夹 / Choose a folder"); '
+        'if (\$folder) { Write-Output \$folder.Self.Path }';
+    final encoded = _encodePowerShell(script);
+    final result = await Process.run('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-EncodedCommand',
+      encoded,
+    ]);
+    final output = (result.stdout as String?)?.trim();
+    if (result.exitCode == 0 && output != null && output.isNotEmpty) {
+      final chosen = p.join(output, 'MoeSketchpad');
+      callback(p.normalize(chosen));
+    } else if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_strings.folderPickError)));
     }
   }
 
@@ -572,6 +729,18 @@ class _InstallerPageState extends State<InstallerPage> {
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 13,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.folder_open, size: 16),
+                  label: Text(strings.folderBrowse),
+                  onPressed: () => _browseForFolder(
+                    context,
+                    (path) => setState(() => _path.text = path),
                   ),
                 ),
               ),
