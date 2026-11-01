@@ -146,8 +146,10 @@ class Uninstaller {
     }
 
     // 5. Remove the install directory itself. This runs last because deleting
-    //    the running installer exe mid-process can break child-process spawning
-    //    on Windows. Best-effort: locked files (e.g. the live exe) are skipped.
+    //    the running uninstaller executable mid-process can break the child
+    //    reg.exe spawns above. Best-effort: files the OS has locked (this
+    //    executable, its DLLs and AOT snapshot) are skipped here and swept up
+    //    by [scheduleSelfErase] once this process has exited.
     tick(UninstallStep.removingFiles, 0.80);
     try {
       await _deleteTree(directory);
@@ -156,6 +158,50 @@ class Uninstaller {
     }
 
     tick(UninstallStep.complete, 1.0);
+  }
+
+  /// Schedules removal of whatever [run] could not delete because this process
+  /// still had it open.
+  ///
+  /// A short-lived detached shell waits for this process to exit and then
+  /// deletes the whole tree. This is what actually removes
+  /// `moesketchpad_uninstaller.exe` and its Flutter runtime files, which are
+  /// locked for as long as the uninstaller is running.
+  static Future<void> scheduleSelfErase(String installDir) async {
+    try {
+      final script = File(
+        p.join(
+          Directory.systemTemp.path,
+          'moesp_cleanup_${DateTime.now().microsecondsSinceEpoch}.cmd',
+        ),
+      );
+      // Retry until the tree is gone: this executable and its DLLs stay locked
+      // until the OS finishes tearing this process down, so the first attempts
+      // legitimately fail. A flat label loop is used because `goto` out of a
+      // parenthesised `for` block is unreliable in cmd.exe.
+      await script.writeAsString(
+        '@echo off\r\n'
+        'setlocal\r\n'
+        'set /a tries=0\r\n'
+        ':retry\r\n'
+        'rmdir /s /q "$installDir" 2>nul\r\n'
+        'if not exist "$installDir" goto done\r\n'
+        'set /a tries+=1\r\n'
+        'if %tries% geq 90 goto done\r\n'
+        'ping -n 2 127.0.0.1 >nul\r\n'
+        'goto retry\r\n'
+        ':done\r\n'
+        'del /f /q "%~f0"\r\n',
+      );
+      await Process.start(
+        'cmd.exe',
+        ['/c', script.path],
+        mode: ProcessStartMode.detached,
+        workingDirectory: Directory.systemTemp.path,
+      );
+    } catch (_) {
+      // Best-effort: a failed self-erase must never surface to the user.
+    }
   }
 
   // ─── helpers ─────────────────────────────────────────────────────────────

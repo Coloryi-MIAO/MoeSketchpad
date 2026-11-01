@@ -81,6 +81,7 @@ jobs:
           New-Item -ItemType Directory -Force installer\assets, packaging\windows\output | Out-Null
           Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath installer\assets\moesketchpad-windows.zip -CompressionLevel Optimal
           Copy-Item assets\if.ico installer\windows\runner\resources\app_icon.ico -Force
+          Copy-Item assets\if.ico installer\uninstaller\windows\runner\resources\app_icon.ico -Force
           Push-Location installer
           flutter pub get
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -91,8 +92,27 @@ jobs:
           flutter build windows --release --build-name=1.0.0 --build-number=${{ github.run_number }} --dart-define=MSP_BUILD_NUMBER=${{ github.run_number }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Pop-Location
-          Compress-Archive -Path installer\build\windows\x64\runner\Release\* -DestinationPath packaging\windows\output\moesketchpad-setup-windows-x64.zip -CompressionLevel Optimal
+          Push-Location installer\uninstaller
+          flutter pub get
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter analyze
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter build windows --release --build-name=1.0.0 --build-number=${{ github.run_number }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+          # Ship the uninstaller as a self-contained bundle in its own
+          # `uninstaller\` subfolder. It is a separate Flutter application, so
+          # its data\ and DLL must not collide with the installer's own.
+          $uninstSrc = "installer\uninstaller\build\windows\x64\runner\Release"
+          $bundle = "installer\build\windows\x64\runner\Release\uninstaller"
+          New-Item -ItemType Directory -Force $bundle | Out-Null
+          Copy-Item "$uninstSrc\moesketchpad_uninstaller.exe" $bundle -Force
+          Copy-Item "$uninstSrc\flutter_windows.dll" $bundle -Force
+          Copy-Item "$uninstSrc\data" $bundle -Recurse -Force
           Remove-Item installer\assets\moesketchpad-windows.zip -Force
+          Compress-Archive -Path installer\build\windows\x64\runner\Release\* -DestinationPath packaging\windows\output\moesketchpad-setup-windows-x64.zip -CompressionLevel Optimal
       - name: Add GPL source notice to artifact
         shell: pwsh
         run: |

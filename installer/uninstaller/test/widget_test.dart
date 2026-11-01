@@ -2,10 +2,26 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:moesketchpad_installer/install_manifest.dart';
-import 'package:moesketchpad_installer/uninstaller.dart';
+import 'package:moesketchpad_uninstaller/install_manifest.dart';
+import 'package:moesketchpad_uninstaller/main.dart';
+import 'package:moesketchpad_uninstaller/uninstaller.dart';
 
 void main() {
+  group('readInstallDir', () {
+    test('parses --install-dir', () {
+      expect(
+        readInstallDir(['--install-dir=C:\\Apps\\MoeSketchpad']),
+        r'C:\Apps\MoeSketchpad',
+      );
+    });
+
+    test('ignores an empty or quoted value', () {
+      final fallback = readInstallDir(['--install-dir=']);
+      expect(fallback, endsWith('MoeSketchpad'));
+      expect(fallback.contains('"'), isFalse);
+    });
+  });
+
   group('InstallManifest round-trips', () {
     test('write then load', () async {
       final dir = await Directory.systemTemp.createTemp('moesp_manifest');
@@ -33,7 +49,7 @@ void main() {
   });
 
   group('Uninstaller', () {
-    test('emits steps in order and completes', () async {
+    test('emits steps in order and removes the install directory', () async {
       final dir = await Directory.systemTemp.createTemp('moesp_uninstall');
       final manifest = InstallManifest(
         installDir: dir.path,
@@ -56,8 +72,9 @@ void main() {
       expect(
         steps,
         containsAllInOrder([
-          // Registry + PATH + shortcuts run before the install dir is removed
-          // so the running uninstaller exe stays on disk for child processes.
+          // Registry, PATH and shortcuts are cleared before the install
+          // directory is removed so the running uninstaller exe stays on disk
+          // for the child reg.exe processes.
           UninstallStep.removingAssociation,
           UninstallStep.removingShortcuts,
           UninstallStep.removingPath,

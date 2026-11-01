@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:moesketchpad_installer/install_manifest.dart';
-import 'package:moesketchpad_installer/uninstall_page.dart';
 import 'package:moesketchpad_installer/installer_strings.dart';
 import 'package:moesketchpad_installer/package_archive.dart';
 import 'package:moesketchpad_installer/window_chrome.dart';
@@ -66,17 +65,11 @@ Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   final waitPid = _readWaitPid(args);
   final installDir = _readInstallDir(args);
-  final uninstall = args.contains('--uninstall');
-  if (uninstall) {
-    runApp(UninstallerApp(installDir: installDir));
-    return;
-  }
   runApp(InstallerApp(waitPid: waitPid, installDir: installDir));
 }
 
-/// Reads the install directory for an uninstall invoked from Add/Remove
-/// Programs. The ARP entry stores it in [UninstallString]; when absent, fall
-/// back to the manifest-less default install location.
+/// Reads the target installation directory from `--install-dir=<path>`, falling
+/// back to the standard per-user install location when it is not supplied.
 String _readInstallDir(List<String> args) {
   final explicit = args
       .where((arg) => arg.startsWith('--install-dir='))
@@ -240,19 +233,14 @@ class _InstallerPageState extends State<InstallerPage> {
         }
       }
 
-      // Copy this running installer next to the app so the ARP uninstall entry
-      // (UninstallString -> "<installer.exe>" --uninstall) has something to call.
+      // Copy the standalone uninstaller next to the app so the Add/Remove
+      // Programs entry (UninstallString -> "<uninstaller.exe>" --install-dir=…)
+      // has something to call. The uninstaller ships alongside this setup exe.
       setState(() {
         _progress = 0.91;
         _status = strings.statusIntegration;
       });
-      final self = File(Platform.resolvedExecutable);
-      final target = File(
-        p.join(installDir.path, 'moesketchpad_installer.exe'),
-      );
-      if (await self.exists() && self.path != target.path) {
-        await self.copy(target.path);
-      }
+      await _installUninstaller(installDir.path);
 
       await _registerIntegration(
         installDir.path,
@@ -446,13 +434,47 @@ class _InstallerPageState extends State<InstallerPage> {
     _registerUninstallEntry(installDir);
   }
 
+  /// Copies the standalone uninstaller bundle into `<installDir>\uninstaller\`.
+  ///
+  /// The uninstaller ships beside this setup executable as a self-contained
+  /// Flutter bundle in an `uninstaller\` subfolder (`moesketchpad_uninstaller.exe`
+  /// plus its `data\` and `flutter_windows.dll`). It is a separate Flutter
+  /// application, so its runtime files must stay in their own subdirectory
+  /// rather than colliding with the app's own `data\` folder in the
+  /// installation root.
+  Future<void> _installUninstaller(String installDir) async {
+    final setupDir = File(Platform.resolvedExecutable).parent;
+    final source = Directory(p.join(setupDir.path, 'uninstaller'));
+    final target = Directory(p.join(installDir, 'uninstaller'));
+    if (!await source.exists()) return;
+    await _copyDirectory(source, target);
+  }
+
+  /// Recursively copies [source] into [destination], creating directories as
+  /// needed and overwriting existing files.
+  Future<void> _copyDirectory(Directory source, Directory destination) async {
+    await destination.create(recursive: true);
+    await for (final entity in source.list(followLinks: false)) {
+      final name = p.basename(entity.path);
+      final target = p.join(destination.path, name);
+      if (entity is Directory) {
+        await _copyDirectory(entity, Directory(target));
+      } else if (entity is File) {
+        await entity.copy(target);
+      }
+    }
+  }
+
   /// Registers the install in Add/Remove Programs so the app has a standard
-  /// uninstall entry. The installer doubles as the uninstaller via the
-  /// `--uninstall` flag.
+  /// uninstall entry that launches the standalone uninstaller.
   void _registerUninstallEntry(String installDir) {
     const key =
         r'HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\MoeSketchpad';
-    final exePath = p.join(installDir, 'moesketchpad_installer.exe');
+    final exePath = p.join(
+      installDir,
+      'uninstaller',
+      'moesketchpad_uninstaller.exe',
+    );
     final escapedExe = exePath.replaceAll("'", "''");
     // Write the manifest so the uninstaller knows which options were chosen.
     InstallManifest.writeTo(
@@ -512,7 +534,7 @@ class _InstallerPageState extends State<InstallerPage> {
       '/t',
       'REG_SZ',
       '/d',
-      '"$escapedExe" --uninstall --install-dir="$installDir"',
+      '"$escapedExe" --install-dir="$installDir"',
       '/f',
     ]);
     _run('reg.exe', [
@@ -561,8 +583,10 @@ class _InstallerPageState extends State<InstallerPage> {
     BuildContext context,
     void Function(String path) callback,
   ) async {
-    final outFile =
-        p.join(Platform.environment['TEMP'] ?? '.', 'moesp_folderpick.txt');
+    final outFile = p.join(
+      Platform.environment['TEMP'] ?? '.',
+      'moesp_folderpick.txt',
+    );
     // Remove a stale result from a previous run.
     try {
       await File(outFile).delete();
@@ -588,9 +612,9 @@ class _InstallerPageState extends State<InstallerPage> {
       final chosen = p.join(txt, 'MoeSketchpad');
       callback(p.normalize(chosen));
     } else if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_strings.folderPickError)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_strings.folderPickError)));
     }
   }
 

@@ -68,42 +68,6 @@ class InstallerStrings {
   String get cancel => isChinese ? '取消' : 'Cancel';
   String get finish => isChinese ? '完成' : 'Finish';
   String get retry => isChinese ? '重试' : 'Try again';
-  String get uninstall => isChinese ? '卸载' : 'Uninstall';
-  String get cancelUninstall => isChinese ? '取消卸载' : 'Cancel uninstall';
-
-  // --------------------------------------------------------------- uninstalling
-
-  String get uninstallingHeading =>
-      isChinese ? '正在卸载萌板' : 'Uninstalling MoeSketchpad';
-  String get uninstallHeading => isChinese ? '卸载萌板' : 'Uninstall MoeSketchpad';
-  String get uninstallCancel => isChinese ? '取消卸载' : 'Cancel';
-  String get autoConfirmHint => isChinese
-      ? '卸载将在 3 秒后自动开始…'
-      : 'Uninstall will start automatically in 3 seconds…';
-  String get uninstallConfirmBody => isChinese
-      ? '即将从此电脑移除萌板、moesp 命令、桌面快捷方式、开始菜单快捷方式以及 .moesp 文件关联。\n\n此操作不可撤销。'
-      : 'This will remove MoeSketchpad, the moesp command, desktop and Start '
-            'menu shortcuts, and the .moesp file association from this PC.\n\n'
-            'This action cannot be undone.';
-  String get uninstallStatusRemoving =>
-      isChinese ? '正在删除安装文件…' : 'Removing installation files…';
-  String get uninstallStatusShortcuts =>
-      isChinese ? '正在删除快捷方式…' : 'Removing shortcuts…';
-  String get uninstallStatusAssociation =>
-      isChinese ? '正在删除 .moesp 文件关联…' : 'Removing the .moesp file association…';
-  String get uninstallStatusPath =>
-      isChinese ? '正在从 PATH 中移除 moesp…' : 'Removing moesp from PATH…';
-  String get uninstallStatusRegistry =>
-      isChinese ? '正在删除注册表条目…' : 'Removing registry entries…';
-  String get uninstallComplete =>
-      isChinese ? '卸载完成' : 'Uninstallation complete';
-  String get uninstallWindowTitle =>
-      isChinese ? '卸载萌板' : 'MoeSketchpad Uninstall';
-  String get uninstallCompleteHeading =>
-      isChinese ? '已卸载萌板' : 'MoeSketchpad has been uninstalled';
-  String get uninstallCompleteBody => isChinese
-      ? '萌板已从此电脑上移除。感谢您的使用。'
-      : 'MoeSketchpad and its file associations have been removed from this PC. Thank you for using it.';
 
   // --------------------------------------------------------------- progress
 
